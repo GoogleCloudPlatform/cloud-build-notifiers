@@ -46,7 +46,7 @@ steps:
     - "--update-env-vars=\
         PROJECT_ID=$PROJECT_ID,\
         SUBSCRIBER_ID=$PROJECT_ID-$_SUBSCRIBER_SUFFIX,\
-        CONFIG_PATH=gs://$PROJECT_ID-notifiers-config/$_CONFIG_OBJECT"
+        CONFIG_PATH=$_CONFIG_PATH"
 
 # Push the image.
 images:
@@ -55,5 +55,5 @@ images:
 substitutions:
   _NOTIFIER: smtp
   _SUBSCRIBER_SUFFIX: smtp-subscriber
-  _CONFIG_OBJECT: smtp.yaml
+  _CONFIG_PATH: <gcs-config-path>
   _DEPLOY_REGION: us-east1
