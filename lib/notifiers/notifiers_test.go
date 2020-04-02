@@ -20,9 +20,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestMakeCELPredicate(t *testing.T) {
@@ -246,6 +249,104 @@ func TestGetSecretRef(t *testing.T) {
 			if gotRef != tc.wantRef {
 				t.Errorf("GetSecretRef returned %q, want %q", gotRef, tc.wantRef)
 			}
+		})
+	}
+}
+
+func TestAddUTMParams(t *testing.T) {
+	const defaultURL = "https://console.cloud.google.com/cloud-build/builds/some-build-id-here?project=12345"
+	for _, tc := range []struct {
+		name         string
+		origURL      string
+		notifierName string
+		wantParams   map[string][]string // Order does not matter for the values list - we use SortSlices below.
+	}{
+		{
+			name:         "url with no params",
+			origURL:      "https://console.cloud.google.com/cloud-build/builds/some-build-id-here",
+			notifierName: "fax",
+			wantParams: map[string][]string{
+				"utm_campaign": {"google-cloud-build-notifiers"},
+				"utm_medium":   {"fax"},
+				"utm_source":   {"google-cloud-build"},
+			},
+		}, {
+			name:         "default-like url",
+			origURL:      defaultURL,
+			notifierName: "fax",
+			wantParams: map[string][]string{
+				"utm_campaign": {"google-cloud-build-notifiers"},
+				"utm_medium":   {"fax"},
+				"utm_source":   {"google-cloud-build"},
+				"project":      {"12345"},
+			},
+		}, {
+			name:         "notifier name with special characters",
+			origURL:      defaultURL,
+			notifierName: "some *weird* notifier name",
+			wantParams: map[string][]string{
+				"utm_campaign": {"google-cloud-build-notifiers"},
+				"utm_medium":   {"some *weird* notifier name"},
+				"utm_source":   {"google-cloud-build"},
+				"project":      {"12345"},
+			},
+		}, {
+			name: "url with with existing utm params",
+			// Note that these param keys are not sorted.
+			origURL:      defaultURL + "&utm_campaign=blah&utm_source=do%20not%20care&utm_medium=foobar",
+			notifierName: "fax",
+			wantParams: map[string][]string{
+				"utm_campaign": {"google-cloud-build-notifiers", "blah"},
+				"utm_medium":   {"fax", "foobar"},
+				"utm_source":   {"google-cloud-build", "do not care"},
+				"project":      {"12345"},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			newURL, err := AddUTMParams(tc.origURL, tc.notifierName)
+			if err != nil {
+				t.Fatalf("AddUTMParams(%q, %q) failed unexpectedly: %v", tc.origURL, tc.notifierName, err)
+			}
+
+			gotURL, err := url.Parse(newURL)
+			if err != nil {
+				t.Fatalf("url.Parse(%q) failed unexpectedly: %v", newURL, err)
+			}
+
+			less := func(a, b string) bool {
+				return strings.Compare(a, b) < 0
+			}
+
+			for key, vals := range tc.wantParams {
+				if diff := cmp.Diff(vals, gotURL.Query()[key], cmpopts.SortSlices(less)); diff != "" {
+					t.Errorf("unexpected diff in values for key %q:\n%s", key, diff)
+				}
+			}
+		})
+	}
+}
+
+func TestAddUTMParamsErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		origURL      string
+		notifierName string
+	}{{
+		name:         "bad original url",
+		origURL:      "https://not a valid url example.com",
+		notifierName: "fax",
+	}, {
+		name:         "bad encoding escape",
+		origURL:      "https://example.com/foo?project=12345%",
+		notifierName: "fax",
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := AddUTMParams(tc.origURL, tc.notifierName)
+			if err == nil {
+				t.Errorf("AddUTMParams(%q, %q) succeeded unexpectedly: %v", tc.origURL, tc.notifierName, err)
+			}
+			t.Logf("AddUTMParams(%q, %q) got expected error: %v", tc.origURL, tc.notifierName, err)
 		})
 	}
 }

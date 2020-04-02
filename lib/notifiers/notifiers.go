@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -453,4 +454,28 @@ func FindSecretResourceName(secrets []*Secret, ref string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("failed to find Secret with reference name %q in the given secret list", ref)
+}
+
+// AddUTMParams adds UTM campaign tracking parameters to the given Build log URL and returns the new version.
+// The UTM parameters are added to any existing ones, so any existing params will not be ovewritten.
+func AddUTMParams(logURL, notifierName string) (string, error) {
+	u, err := url.Parse(logURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse URL %q: %v", logURL, err)
+	}
+
+	// Use ParseQuery to fail if we get malformed params to start with, since it should never happen.
+	vals, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse query from %q: %v", logURL, err)
+	}
+
+	// Use `Add` instead of `Set` so we don't override any existing params.
+	vals.Add("utm_campaign", "google-cloud-build-notifiers")
+	vals.Add("utm_medium", notifierName)
+	vals.Add("utm_source", "google-cloud-build")
+
+	u.RawQuery = vals.Encode()
+
+	return u.String(), nil
 }
