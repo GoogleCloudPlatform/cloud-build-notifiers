@@ -1,6 +1,6 @@
 # Cloud Build HTTP Notifier
 
-This notifier uses HTTP to `PUT` JSON payload notifications to the given
+This notifier uses HTTP to `POST` JSON payload notifications to the given
 recipient server.
 This notifier runs as a container via Google Cloud Run and responds to
 events that Cloud Build publishes via its
@@ -13,5 +13,5 @@ see [Configuring HTTP notifications](https://cloud.google.com/cloud-build/docs/c
 
 This notifier expects the following fields in the `delivery` map to be set:
 
-- `url`: The HTTP endpoint to which `PUT` requests will be sent. No sort of
+- `url`: The HTTP endpoint to which `POST` requests will be sent. No sort of
 authentication is expected or used.

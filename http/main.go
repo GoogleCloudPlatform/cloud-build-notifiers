@@ -64,12 +64,13 @@ func (h *httpNotifier) SendNotification(ctx context.Context, event *notifiers.Cl
 		return fmt.Errorf("failed to marshal event to JSON: %v", je)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, h.url, bytes.NewBuffer(je))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.url, bytes.NewBuffer(je))
 	if err != nil {
 		return fmt.Errorf("failed to create a new HTTP request: %v", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "GCB-Notifier/0.1 (http)")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

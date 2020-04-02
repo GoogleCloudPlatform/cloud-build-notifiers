@@ -20,7 +20,7 @@ for your Cloud Build project(s).
 There are currently 3 supported notifier types:
 
 -   [`smtp`](./smtp/README.md), which sends emails via an SMTP server.
--   [`http`](./http/README.md), which sends (HTTP `PUT`s) a JSON payload to
+-   [`http`](./http/README.md), which sends (HTTP `POST`s) a JSON payload to
     another HTTP endpoint.
 -   [`slack`](./slack/README.md), which uses a Slack webhook to post a message
     in a Slack channel.
