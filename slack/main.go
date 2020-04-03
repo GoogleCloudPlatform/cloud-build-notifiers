@@ -96,7 +96,7 @@ func (s *slackNotifier) writeMessage(event *notifiers.CloudBuildEvent) (*slack.W
 		clr = "warning"
 	}
 
-	logURL, err := notifiers.AddUTMParams(event.LogURL, "slack-notifier")
+	logURL, err := notifiers.AddUTMParams(event.LogURL, notifiers.ChatMedium)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add UTM params: %v", err)
 	}

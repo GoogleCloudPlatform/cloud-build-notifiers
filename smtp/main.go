@@ -151,7 +151,7 @@ func (s *smtpNotifier) sendSMTPNotification(event *notifiers.CloudBuildEvent) er
 }
 
 func (s *smtpNotifier) buildEmail(event *notifiers.CloudBuildEvent) (string, error) {
-	logURL, err := notifiers.AddUTMParams(event.LogURL, "smtp-notifier")
+	logURL, err := notifiers.AddUTMParams(event.LogURL, notifiers.EmailMedium)
 	if err != nil {
 		return "", fmt.Errorf("failed to add UTM params: %v", err)
 	}

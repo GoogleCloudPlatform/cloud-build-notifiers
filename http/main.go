@@ -60,7 +60,7 @@ func (h *httpNotifier) SendNotification(ctx context.Context, event *notifiers.Cl
 
 	log.Infof("sending HTTP request for event (build id = %s, status = %s)", event.ID, event.Status)
 
-	logURL, err := notifiers.AddUTMParams(event.LogURL, "http-notifier")
+	logURL, err := notifiers.AddUTMParams(event.LogURL, notifiers.HTTPMedium)
 	if err != nil {
 		return fmt.Errorf("failed to add UTM params: %v", err)
 	}

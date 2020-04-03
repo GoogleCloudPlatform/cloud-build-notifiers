@@ -456,9 +456,23 @@ func FindSecretResourceName(secrets []*Secret, ref string) (string, error) {
 	return "", fmt.Errorf("failed to find Secret with reference name %q in the given secret list", ref)
 }
 
+// UTMMedium is an enum that corresponds to a strict set of values for `utm_medium`.
+type UTMMedium string
+
+const (
+	// EmailMedium is for Build log URLs that are sent via email.
+	EmailMedium UTMMedium = "email"
+	// ChatMedium is for Build log URLs that are sent over chat applications.
+	ChatMedium = "chat"
+	// HTTPMedium is for Build log URLs that are sent over HTTP(S) communication (that does not belong to one of the other mediums).
+	HTTPMedium = "http"
+	// OtherMedium is for Build log URLs that sent are over a medium that does not correspond to one of the above mediums.
+	OtherMedium = "other"
+)
+
 // AddUTMParams adds UTM campaign tracking parameters to the given Build log URL and returns the new version.
 // The UTM parameters are added to any existing ones, so any existing params will not be ovewritten.
-func AddUTMParams(logURL, notifierName string) (string, error) {
+func AddUTMParams(logURL string, medium UTMMedium) (string, error) {
 	u, err := url.Parse(logURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse URL %q: %v", logURL, err)
@@ -470,9 +484,17 @@ func AddUTMParams(logURL, notifierName string) (string, error) {
 		return "", fmt.Errorf("failed to parse query from %q: %v", logURL, err)
 	}
 
+	var m string
+	switch medium {
+	case EmailMedium, ChatMedium, HTTPMedium, OtherMedium:
+		m = string(medium)
+	default:
+		return "", fmt.Errorf("unknown UTM medium: %q", medium)
+	}
+
 	// Use `Add` instead of `Set` so we don't override any existing params.
 	vals.Add("utm_campaign", "google-cloud-build-notifiers")
-	vals.Add("utm_medium", notifierName)
+	vals.Add("utm_medium", m)
 	vals.Add("utm_source", "google-cloud-build")
 
 	u.RawQuery = vals.Encode()
