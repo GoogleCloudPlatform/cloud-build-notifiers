@@ -59,6 +59,13 @@ func (h *httpNotifier) SendNotification(ctx context.Context, event *notifiers.Cl
 	}
 
 	log.Infof("sending HTTP request for event (build id = %s, status = %s)", event.ID, event.Status)
+
+	logURL, err := notifiers.AddUTMParams(event.LogURL, notifiers.HTTPMedium)
+	if err != nil {
+		return fmt.Errorf("failed to add UTM params: %v", err)
+	}
+	event.LogURL = logURL
+
 	je, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("failed to marshal event to JSON: %v", je)

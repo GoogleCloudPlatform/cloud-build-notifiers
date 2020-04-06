@@ -70,10 +70,15 @@ func (s *slackNotifier) SendNotification(ctx context.Context, event *notifiers.C
 	}
 
 	log.Infof("sending Slack webhook for Build %q (status: %q; created at: %s)", event.ID, event.Status, event.CreateTime.Format(time.RFC3339))
-	return slack.PostWebhook(s.webhookURL, s.writeMessage(event))
+	msg, err := s.writeMessage(event)
+	if err != nil {
+		return fmt.Errorf("failed to write Slack message: %v", err)
+	}
+
+	return slack.PostWebhook(s.webhookURL, msg)
 }
 
-func (s *slackNotifier) writeMessage(event *notifiers.CloudBuildEvent) *slack.WebhookMessage {
+func (s *slackNotifier) writeMessage(event *notifiers.CloudBuildEvent) (*slack.WebhookMessage, error) {
 	txt := fmt.Sprintf(
 		"Cloud Build (%s, %s): %s",
 		event.ProjectID,
@@ -91,13 +96,18 @@ func (s *slackNotifier) writeMessage(event *notifiers.CloudBuildEvent) *slack.We
 		clr = "warning"
 	}
 
+	logURL, err := notifiers.AddUTMParams(event.LogURL, notifiers.ChatMedium)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add UTM params: %v", err)
+	}
+
 	atch := slack.Attachment{
 		Text:  txt,
 		Color: clr,
 		Actions: []slack.AttachmentAction{slack.AttachmentAction{
-			Text: "View Logs", Type: "button", URL: event.LogURL,
+			Text: "View Logs", Type: "button", URL: logURL,
 		}},
 	}
 
-	return &slack.WebhookMessage{Attachments: []slack.Attachment{atch}}
+	return &slack.WebhookMessage{Attachments: []slack.Attachment{atch}}, nil
 }

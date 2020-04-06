@@ -20,9 +20,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestMakeCELPredicate(t *testing.T) {
@@ -246,6 +249,108 @@ func TestGetSecretRef(t *testing.T) {
 			if gotRef != tc.wantRef {
 				t.Errorf("GetSecretRef returned %q, want %q", gotRef, tc.wantRef)
 			}
+		})
+	}
+}
+
+func TestAddUTMParams(t *testing.T) {
+	const defaultURL = "https://console.cloud.google.com/cloud-build/builds/some-build-id-here?project=12345"
+	for _, tc := range []struct {
+		name       string
+		origURL    string
+		medium     UTMMedium
+		wantParams map[string][]string // Order does not matter for the values list - we use SortSlices below.
+	}{
+		{
+			name:    "url with no params",
+			origURL: "https://console.cloud.google.com/cloud-build/builds/some-build-id-here",
+			medium:  EmailMedium,
+			wantParams: map[string][]string{
+				"utm_campaign": {"google-cloud-build-notifiers"},
+				"utm_medium":   {string(EmailMedium)},
+				"utm_source":   {"google-cloud-build"},
+			},
+		}, {
+			name:    "default-like url",
+			origURL: defaultURL,
+			medium:  ChatMedium,
+			wantParams: map[string][]string{
+				"utm_campaign": {"google-cloud-build-notifiers"},
+				"utm_medium":   {string(ChatMedium)},
+				"utm_source":   {"google-cloud-build"},
+				"project":      {"12345"},
+			},
+		}, {
+			name: "url with with existing utm params",
+			// Note that these param keys are not sorted.
+			origURL: defaultURL + "&utm_campaign=blah&utm_source=do%20not%20care&utm_medium=foobar",
+			medium:  HTTPMedium,
+			wantParams: map[string][]string{
+				"utm_campaign": {"google-cloud-build-notifiers", "blah"},
+				"utm_medium":   {string(HTTPMedium), "foobar"},
+				"utm_source":   {"google-cloud-build", "do not care"},
+				"project":      {"12345"},
+			},
+		}, {
+			name:    "other medium",
+			origURL: defaultURL,
+			medium:  OtherMedium,
+			wantParams: map[string][]string{
+				"utm_campaign": {"google-cloud-build-notifiers"},
+				"utm_medium":   {string(OtherMedium)},
+				"utm_source":   {"google-cloud-build"},
+				"project":      {"12345"},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			newURL, err := AddUTMParams(tc.origURL, tc.medium)
+			if err != nil {
+				t.Fatalf("AddUTMParams(%q, %q) failed unexpectedly: %v", tc.origURL, tc.medium, err)
+			}
+
+			gotURL, err := url.Parse(newURL)
+			if err != nil {
+				t.Fatalf("url.Parse(%q) failed unexpectedly: %v", newURL, err)
+			}
+
+			less := func(a, b string) bool {
+				return strings.Compare(a, b) < 0
+			}
+
+			for key, vals := range tc.wantParams {
+				if diff := cmp.Diff(vals, gotURL.Query()[key], cmpopts.SortSlices(less)); diff != "" {
+					t.Errorf("unexpected diff in values for key %q:\n%s", key, diff)
+				}
+			}
+		})
+	}
+}
+
+func TestAddUTMParamsErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		origURL string
+		medium  UTMMedium
+	}{{
+		name:    "bad original url",
+		origURL: "https://not a valid url example.com",
+		medium:  OtherMedium,
+	}, {
+		name:    "bad encoding escape",
+		origURL: "https://example.com/foo?project=12345%",
+		medium:  OtherMedium,
+	}, {
+		name:    "coerced medium",
+		origURL: "https://example.com/bar?project=12345",
+		medium:  UTMMedium("gotcha"),
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := AddUTMParams(tc.origURL, tc.medium)
+			if err == nil {
+				t.Errorf("AddUTMParams(%q, %q) succeeded unexpectedly: %v", tc.origURL, tc.medium, err)
+			}
+			t.Logf("AddUTMParams(%q, %q) got expected error: %v", tc.origURL, tc.medium, err)
 		})
 	}
 }
