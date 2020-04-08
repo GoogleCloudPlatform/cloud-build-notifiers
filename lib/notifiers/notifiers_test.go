@@ -86,7 +86,7 @@ func (f *fakeGCSReaderFactory) NewReader(_ context.Context, bucket, object strin
 }
 
 const validConfigYAML = `
-apiVersion: gcb-notifiers/v1alpha1
+apiVersion: cloud-build-notifiers/v1alpha1
 kind: TestNotifier
 metadata:
   name: my-test-notifier
@@ -104,7 +104,7 @@ spec:
 `
 
 var validConfig = &Config{
-	APIVersion: "gcb-notifiers/v1alpha1",
+	APIVersion: "cloud-build-notifiers/v1alpha1",
 	Kind:       "TestNotifier",
 	Metadata: &Metadata{
 		Name: "my-test-notifier",
@@ -351,6 +351,47 @@ func TestAddUTMParamsErrors(t *testing.T) {
 				t.Errorf("AddUTMParams(%q, %q) succeeded unexpectedly: %v", tc.origURL, tc.medium, err)
 			}
 			t.Logf("AddUTMParams(%q, %q) got expected error: %v", tc.origURL, tc.medium, err)
+		})
+	}
+}
+
+func TestValidateConfig(t *testing.T) {
+	// Config setup.
+	var badAPIVersion Config
+	badAPIVersion = *validConfig
+	badAPIVersion.APIVersion = "something-not-correct"
+	if badAPIVersion == *validConfig {
+		t.Fatal("sanity check failed")
+	}
+
+	for _, tc := range []struct {
+		name    string
+		cfg     *Config
+		wantErr bool
+	}{
+		{
+			name: "valid config",
+			cfg:  validConfig,
+		}, {
+			name:    "bad `apiVersion`",
+			cfg:     &badAPIVersion,
+			wantErr: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateConfig(tc.cfg)
+			if err != nil {
+				if !tc.wantErr {
+					t.Fatalf("validateConfig(%v) got unexpected error: %v", tc.cfg, err)
+				} else {
+					t.Logf("got expected error: %v", err)
+					return
+				}
+			}
+
+			if tc.wantErr {
+				t.Fatalf("validateConfig(%v) unexpectedly succeeded", tc.cfg)
+			}
 		})
 	}
 }
