@@ -30,8 +30,8 @@ There are currently 3 supported notifier types:
 -   [`slack`](./slack/README.md), which uses a Slack webhook to post a message
     in a Slack channel.
 
-**See the official Google Cloud docs
-[here](https://cloud.google.com/cloud-build/docs/configure-notifications) for how to use Cloud Build notifiers.**
+**See the Google Cloud Alpha docs for how to use Cloud Build Notifiers.**
+**(Note: Docs are only available to Cloud Build Alpha users.)**
 
 ## License
 
