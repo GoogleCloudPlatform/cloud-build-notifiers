@@ -26,6 +26,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 )
 
 func TestMakeCELPredicate(t *testing.T) {
@@ -33,29 +34,59 @@ func TestMakeCELPredicate(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		filter    string
-		event     *CloudBuildEvent
+		build     *cbpb.Build
 		wantMatch bool
 	}{
 		{
 			name:      "id match",
-			filter:    `event.id == "abc"`,
-			event:     &CloudBuildEvent{ID: "abc"},
+			filter:    `build.id == "abc"`,
+			build:     &cbpb.Build{Id: "abc"},
 			wantMatch: true,
 		}, {
 			name:      "id mismatch",
-			filter:    `event.id == "abc"`,
-			event:     &CloudBuildEvent{ID: "def"},
+			filter:    `build.id == "abc"`,
+			build:     &cbpb.Build{Id: "def"},
+			wantMatch: false,
+		}, {
+			name:      "status match",
+			filter:    "build.status ==Build.Status.SUCCESS",
+			build:     &cbpb.Build{Id: "xyz", Status: cbpb.Build_SUCCESS},
+			wantMatch: true,
+		}, {
+			name:      "status mismatch",
+			filter:    "build.status == Build.Status.FAILURE",
+			build:     &cbpb.Build{Id: "zyx", Status: cbpb.Build_WORKING},
+			wantMatch: false,
+		}, {
+			name:      "trigger ID match",
+			filter:    `build.build_trigger_id == "some-id"`,
+			build:     &cbpb.Build{BuildTriggerId: "some-id"},
+			wantMatch: true,
+		}, {
+			name:      "trigger ID mismatch",
+			filter:    `build.build_trigger_id == "other-id"`,
+			build:     &cbpb.Build{BuildTriggerId: "blah-id"},
 			wantMatch: false,
 		}, {
 			name:      "complex filter match",
-			filter:    `event.buildTriggerId == "trigger-id" && event.status == "SUCCESS" && "blah" in event.tags`,
-			event:     &CloudBuildEvent{BuildTriggerID: "trigger-id", Status: "SUCCESS", Tags: []string{"blah"}},
+			filter:    `build.build_trigger_id == "trigger-id" && build.status == Build.Status.SUCCESS && "blah" in build.tags`,
+			build:     &cbpb.Build{BuildTriggerId: "trigger-id", Status: cbpb.Build_SUCCESS, Tags: []string{"blah"}},
 			wantMatch: true,
 		}, {
 			name:      "complex filter mismatch",
-			filter:    `event.buildTriggerId == "trigger-id" && event.status == "SUCCESS" && size(event.tags) == 2 && "bar" in event.tags`,
-			event:     &CloudBuildEvent{BuildTriggerID: "trigger-id", Status: "SUCCESS", Tags: []string{"foo", "baz"}},
+			filter:    `build.build_trigger_id == "trigger-id" && build.status == Build.Status.SUCCESS && size(build.tags) == 2 && "bar" in build.tags`,
+			build:     &cbpb.Build{BuildTriggerId: "trigger-id", Status: cbpb.Build_SUCCESS, Tags: []string{"foo", "baz"}},
 			wantMatch: false,
+		}, {
+			name:      "substitution match",
+			filter:    `"key1" in build.substitutions && build.substitutions["key2"] == "val2"`,
+			build:     &cbpb.Build{Substitutions: map[string]string{"key1": "val1", "key2": "val2"}},
+			wantMatch: true,
+		}, {
+			name:      "images match",
+			filter:    `"gcr.io/example/image-baz" in build.images`,
+			build:     &cbpb.Build{Images: []string{"gcr.io/example/image-foo", "gcr.io/example/image-bar", "gcr.io/example/image-baz"}},
+			wantMatch: true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -64,8 +95,8 @@ func TestMakeCELPredicate(t *testing.T) {
 				t.Fatalf("MakeCELProgram(%q): %v", tc.filter, err)
 			}
 
-			if pred.Apply(ctx, tc.event) != tc.wantMatch {
-				t.Errorf("CELPredicate(%+v) != %v", tc.event, tc.wantMatch)
+			if pred.Apply(ctx, tc.build) != tc.wantMatch {
+				t.Errorf("CELPredicate(%+v) != %v", tc.build, tc.wantMatch)
 			}
 		})
 	}
@@ -118,12 +149,10 @@ var validConfig = &Config{
 				"third_key": map[interface{}]interface{}{string("foo"): string("bar")},
 			},
 		},
-		Secrets: []*Secret{
-			&Secret{
-				LocalName:    "some-secret",
-				ResourceName: "projects/my-project/secrets/my-secret/versions/latest",
-			},
-		},
+		Secrets: []*Secret{{
+			LocalName:    "some-secret",
+			ResourceName: "projects/my-project/secrets/my-secret/versions/latest",
+		}},
 	},
 }
 

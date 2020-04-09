@@ -23,6 +23,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
+	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 )
 
 func main() {
@@ -52,21 +53,21 @@ func (h *httpNotifier) SetUp(_ context.Context, cfg *notifiers.Config, _ notifie
 	return nil
 }
 
-func (h *httpNotifier) SendNotification(ctx context.Context, event *notifiers.CloudBuildEvent) error {
-	if !h.filter.Apply(ctx, event) {
-		log.V(2).Infof("not sending HTTP request for event (build id = %s, status = %s)", event.ID, event.Status)
+func (h *httpNotifier) SendNotification(ctx context.Context, build *cbpb.Build) error {
+	if !h.filter.Apply(ctx, build) {
+		log.V(2).Infof("not sending HTTP request for event (build id = %s, status = %v)", build.Id, build.Status)
 		return nil
 	}
 
-	log.Infof("sending HTTP request for event (build id = %s, status = %s)", event.ID, event.Status)
+	log.Infof("sending HTTP request for event (build id = %s, status = %s)", build.Id, build.Status)
 
-	logURL, err := notifiers.AddUTMParams(event.LogURL, notifiers.HTTPMedium)
+	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.HTTPMedium)
 	if err != nil {
 		return fmt.Errorf("failed to add UTM params: %v", err)
 	}
-	event.LogURL = logURL
+	build.LogUrl = logURL
 
-	je, err := json.Marshal(event)
+	je, err := json.Marshal(build)
 	if err != nil {
 		return fmt.Errorf("failed to marshal event to JSON: %v", je)
 	}

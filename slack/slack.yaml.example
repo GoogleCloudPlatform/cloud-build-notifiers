@@ -18,7 +18,7 @@ metadata:
   name: example-slack-notifier
 spec:
   notification:
-    filter: event.status == "SUCCESS"
+    filter: build.status == Build.Status.SUCCESS
     delivery:
       webhookUrl:
         secretRef: webhook-url

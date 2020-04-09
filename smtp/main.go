@@ -25,6 +25,8 @@ import (
 
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
+	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 )
 
 const (
@@ -124,18 +126,18 @@ func getMailConfig(ctx context.Context, sg notifiers.SecretGetter, spec *notifie
 	}, nil
 }
 
-func (s *smtpNotifier) SendNotification(ctx context.Context, event *notifiers.CloudBuildEvent) error {
-	if s.filter.Apply(ctx, event) {
-		log.Infof("sending mail for event: %+v", event)
-		return s.sendSMTPNotification(event)
+func (s *smtpNotifier) SendNotification(ctx context.Context, build *cbpb.Build) error {
+	if s.filter.Apply(ctx, build) {
+		log.Infof("sending mail for event:\n%s", proto.MarshalTextString(build))
+		return s.sendSMTPNotification(build)
 	}
 
-	log.V(2).Infof("no mail for event: %+v", event)
+	log.V(2).Infof("no mail for event:\n%s", proto.MarshalTextString(build))
 	return nil
 }
 
-func (s *smtpNotifier) sendSMTPNotification(event *notifiers.CloudBuildEvent) error {
-	email, err := s.buildEmail(event)
+func (s *smtpNotifier) sendSMTPNotification(build *cbpb.Build) error {
+	email, err := s.buildEmail(build)
 	if err != nil {
 		log.Warningf("failed to build email: %v", err)
 	}
@@ -150,19 +152,19 @@ func (s *smtpNotifier) sendSMTPNotification(event *notifiers.CloudBuildEvent) er
 	return nil
 }
 
-func (s *smtpNotifier) buildEmail(event *notifiers.CloudBuildEvent) (string, error) {
-	logURL, err := notifiers.AddUTMParams(event.LogURL, notifiers.EmailMedium)
+func (s *smtpNotifier) buildEmail(build *cbpb.Build) (string, error) {
+	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.EmailMedium)
 	if err != nil {
 		return "", fmt.Errorf("failed to add UTM params: %v", err)
 	}
-	event.LogURL = logURL
+	build.LogUrl = logURL
 
 	body := new(bytes.Buffer)
-	if err := s.tmpl.Execute(body, event); err != nil {
+	if err := s.tmpl.Execute(body, build); err != nil {
 		return "", err
 	}
 
-	subject := fmt.Sprintf("Cloud Build [%s]: %s", event.ProjectID, event.ID)
+	subject := fmt.Sprintf("Cloud Build [%s]: %s", build.ProjectId, build.Id)
 
 	header := make(map[string]string)
 	header["From"] = s.mcfg.sender
@@ -204,9 +206,8 @@ const htmlBody = `<!doctype html>
 <div class="row">
 <div class="col s2">&nbsp;</div>
 <div class="col s8">
-<div class="card {{if eq .Status "SUCCESS"}}green{{else}}red{{end}}">
 <div class="card-content white-text">
-<div class="card-title">{{.ProjectID}}: {{.BuildTriggerID}}</div>
+<div class="card-title">{{.ProjectId}}: {{.BuildTriggerId}}</div>
 </div>
 <div class="card-content white">
 <table class="bordered">
@@ -216,24 +217,11 @@ const htmlBody = `<!doctype html>
 	  <td>{{.Status}}</td>
 	</tr>
 	<tr>
-	  <td>Source Repo</td>
-	  <td>{{.Source.RepoSource.RepoName}}</td>
-	</tr>
-	<tr>
-	  <td>Source Branch</td>
-	  <td>{{.Source.RepoSource.BranchName}}</td>
-	</tr>
-	<tr>
 	  <td>Log URL</td>
-	  <td><a href="{{.LogURL}}">Click Here</a></td>
-	</tr>
-	<tr>
-	  <td>Build URL</td>
-	  <td><a href="https://console.cloud.google.com/cloud-build/builds/{{.ID}}?project={{.ProjectID}}">Click Here</a></td>
+	  <td><a href="{{.LogUrl}}">Click Here</a></td>
 	</tr>
   </tbody>
 </table>
-</div>
 </div>
 </div>
 </div>
