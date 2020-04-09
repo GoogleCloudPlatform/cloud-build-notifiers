@@ -14,46 +14,24 @@
 
 steps:
 # Build the binary and put it into the builder image.
-- name: 'gcr.io/cloud-builders/docker'
+- name: gcr.io/cloud-builders/docker
   args:
-    - 'build'
-    - '-t'
-    - 'gcr.io/$PROJECT_ID/notifiers/$_NOTIFIER'
-    - '--file=./smtp/Dockerfile'
+    - build
+    - -t
+    - $_IMAGE_PATH
+    - --file=./smtp/Dockerfile
     - '.'
 # Run the smoketest to verify that everything built correctly.
-- name: 'gcr.io/$PROJECT_ID/notifiers/$_NOTIFIER'
+- name: $_IMAGE_PATH
   args:
-    - '--smoketest'
-    - '--alsologtostderr'
-# Push the new Docker image to GCR so Cloud Run pulls the _actual_ latest.
-- name: 'gcr.io/cloud-builders/docker'
-  args:
-    - 'push'
-    - 'gcr.io/$PROJECT_ID/notifiers/$_NOTIFIER'
-# Deploy the image to Cloud Run.
-- name: 'gcr.io/cloud-builders/gcloud'
-  args:
-    - 'run'
-    - 'deploy'
-    - 'cloud-build-${_NOTIFIER}-notifier'
-    - '--image'
-    - 'gcr.io/$PROJECT_ID/notifiers/$_NOTIFIER'
-    - '--region'
-    - '$_DEPLOY_REGION'
-    - '--platform'
-    - 'managed'
-    - "--update-env-vars=\
-        PROJECT_ID=$PROJECT_ID,\
-        SUBSCRIBER_ID=$PROJECT_ID-$_SUBSCRIBER_SUFFIX,\
-        CONFIG_PATH=$_CONFIG_PATH"
+    - --smoketest
+    - --alsologtostderr
 
 # Push the image.
 images:
-- 'gcr.io/$PROJECT_ID/notifiers/$_NOTIFIER'
+- $_IMAGE_PATH
 
 substitutions:
-  _NOTIFIER: smtp
-  _SUBSCRIBER_SUFFIX: smtp-subscriber
-  _CONFIG_PATH: <gcs-config-path>
-  _DEPLOY_REGION: us-east1
+  # The container registry path to use for uploading the newly built image.
+  # For example, this could be 'gcr.io/<your-project-id>/notifiers/smtp'.
+  _IMAGE_PATH: <image-path-here>
