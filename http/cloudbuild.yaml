@@ -26,11 +26,6 @@ steps:
   args:
     - --smoketest
     - --alsologtostderr
-# Push the new Docker image to GCR so Cloud Run pulls the _actual_ latest.
-- name: gcr.io/cloud-builders/docker
-  args:
-    - push
-    - $_IMAGE_PATH
 
 # Push the image.
 images:
