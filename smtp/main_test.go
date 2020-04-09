@@ -17,10 +17,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
+	"text/template"
 
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	"github.com/google/go-cmp/cmp"
+	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 	"gopkg.in/yaml.v2"
 )
 
@@ -53,9 +56,7 @@ func TestGetMailConfig(t *testing.T) {
 						"recipients": []interface{}{"my-cto@example.com", "my-friend@example.com"},
 					},
 				},
-				Secrets: []*notifiers.Secret{
-					&notifiers.Secret{LocalName: "my-smtp-password", ResourceName: "/does/not/matter"},
-				},
+				Secrets: []*notifiers.Secret{{LocalName: "my-smtp-password", ResourceName: "/does/not/matter"}},
 			},
 			wantConfig: mailConfig{
 				server:     "smtp.example.com",
@@ -75,9 +76,7 @@ func TestGetMailConfig(t *testing.T) {
 						"recipients": []interface{}{"my-cto@example.com", "my-friend@example.com"},
 					},
 				},
-				Secrets: []*notifiers.Secret{
-					&notifiers.Secret{LocalName: "my-smtp-password", ResourceName: "/does/not/matter"},
-				},
+				Secrets: []*notifiers.Secret{{LocalName: "my-smtp-password", ResourceName: "/does/not/matter"}},
 			},
 			wantErr: true,
 		},
@@ -145,5 +144,37 @@ spec:
 
 	if diff := cmp.Diff(wantMailConfig, gotMailConfig, cmp.AllowUnexported(mailConfig{})); diff != "" {
 		t.Errorf("gotMailConfig got unexpected diff: %s", diff)
+	}
+}
+
+func TestDefaultEmailTemplate(t *testing.T) {
+	tmpl, err := template.New("email_template").Parse(htmlBody)
+	if err != nil {
+		t.Fatalf("template.Parse failed: %v", err)
+	}
+
+	build := &cbpb.Build{
+		Id:             "some-build-id",
+		ProjectId:      "my-project-id",
+		BuildTriggerId: "some-trigger-id",
+		Status:         cbpb.Build_SUCCESS,
+		LogUrl:         "https://some.example.com/log/url",
+	}
+
+	body := new(bytes.Buffer)
+	if err := tmpl.Execute(body, build); err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	if !strings.Contains(body.String(), `<div class="card-title">my-project-id: some-trigger-id</div>`) {
+		t.Error("missing correct .card-title div")
+	}
+
+	if !strings.Contains(body.String(), `SUCCESS`) {
+		t.Error("missing status")
+	}
+
+	if !strings.Contains(body.String(), `<a href="https://some.example.com/log/url">`) {
+		t.Error("missing Log URL")
 	}
 }

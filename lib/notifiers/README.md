@@ -23,10 +23,8 @@ In order to filter on specific notifications, you can use the
 - `notifiers.CELPredicate`: This filter uses a
 compiled-at-startup [CEL](https://opensource.google/projects/cel) program string
 to filter on incoming notifications. It uses a single input variable named
-`event` and features the same fields as `notifiers.CloudBuildEvent`. For
-example, you can write a filter like `event.status == "SUCCESS" || "special" in
-event.tags` to only notify on events that are successful or have the `"special"`
+`build`, which is the incoming Build proto from the Pub/Sub notifications. For
+example, you can write a filter like
+`build.status == Build.Status.SUCCESS || "special" in build.tags`
+to only notify on events that are successful or have the `"special"`
 build tag.
-
-- `notifiers.TriggerPredicate`: This filter uses the given trigger
-name to filter on build events.

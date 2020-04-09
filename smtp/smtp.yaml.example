@@ -18,7 +18,7 @@ metadata:
   name: example-smtp-notifier
 spec:
   notification:
-    filter: event.status == "SUCCESS"
+    filter: build.status == Build.Status.SUCCESS
     delivery:
       server: smtp.gmail.com
       port: '587'

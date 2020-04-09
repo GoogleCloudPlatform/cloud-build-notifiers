@@ -18,7 +18,7 @@ metadata:
   name: example-http-notifier
 spec:
   notification:
-    filter: event.status == "SUCCESS"
+    filter: build.status == Build.Status.SUCCESS
     delivery:
       # The `http(s)://` protocol prefix is required.
       url: https://some.example.com/notify
