@@ -47,13 +47,14 @@ const (
 	secretRef       = "secretRef"
 )
 
+var (
+	// Set of allowed notifier Config `apiVersions`.
+	allowedYAMLAPIVersions = map[string]bool{"cloud-build-notifiers/v1alpha1": true}
+)
+
 // Flags.
 var (
 	smoketestFlag = flag.Bool("smoketest", false, "If true, Main will simply log the notifier type and exit.")
-)
-
-var (
-	enableCEL = false
 )
 
 // Config is the common type for (YAML-based) configuration files for notifications.
@@ -240,6 +241,9 @@ func Main(notifier Notifier) error {
 	if err != nil {
 		return fmt.Errorf("failed to get config from GCS: %v", err)
 	}
+	if err := validateConfig(cfg); err != nil {
+		return fmt.Errorf("got invalid config from path %q: %v", cfgPath, err)
+	}
 	log.V(2).Infof("got config from GCS (%q): %+v\n", cfgPath, cfg)
 
 	if err := notifier.SetUp(ctx, cfg, &actualSecretManager{smc}); err != nil {
@@ -335,6 +339,16 @@ func getGCSConfig(ctx context.Context, grf gcsReaderFactory, path string) (*Conf
 	}
 
 	return cfg, nil
+}
+
+// validateConfig checks the following (or errors):
+// - apiVersion is one of allowedYAMLAPIVersions.
+func validateConfig(cfg *Config) error {
+	if allowed := allowedYAMLAPIVersions[cfg.APIVersion]; !allowed {
+		return fmt.Errorf("expected `apiVersion` %q to be one of the following:\n%v",
+			cfg.APIVersion, allowedYAMLAPIVersions)
+	}
+	return nil
 }
 
 // MakeCELPredicate returns a CELPredicate for the given filter string of CEL code.
