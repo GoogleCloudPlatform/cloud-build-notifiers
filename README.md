@@ -3,6 +3,11 @@
 This repo provides deployable notifier images and sources, as well as libraries
 for creating new notifiers.
 
+> This is an Alpha release of Cloud Build Notifiers.
+> This codebase might be changed in ways that are not backwards-compatible.
+> We do not recommend using this codebase for production applications.
+> Furthermore, this release is not subject to any SLA or deprecation policy.
+
 [Cloud Build](https://cloud.google.com/cloud-build) notifiers are Docker
 containers that connect to the
 [Cloud Build Pub/Sub topic](https://cloud.google.com/cloud-build/docs/send-build-notifications)
@@ -25,8 +30,8 @@ There are currently 3 supported notifier types:
 -   [`slack`](./slack/README.md), which uses a Slack webhook to post a message
     in a Slack channel.
 
-**See the official Google Cloud docs
-[here](https://cloud.google.com/cloud-build/docs/configure-notifications) for how to use Cloud Build notifiers.**
+**See the Google Cloud Alpha docs for how to use Cloud Build Notifiers.**
+**(Note: Docs are only available to Cloud Build Alpha users.)**
 
 ## License
 
