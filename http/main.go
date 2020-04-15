@@ -17,13 +17,14 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func main() {
@@ -67,12 +68,13 @@ func (h *httpNotifier) SendNotification(ctx context.Context, build *cbpb.Build) 
 	}
 	build.LogUrl = logURL
 
-	je, err := json.Marshal(build)
+	mo := protojson.MarshalOptions{}
+	jb, err := mo.Marshal(proto.MessageV2(build))
 	if err != nil {
-		return fmt.Errorf("failed to marshal event to JSON: %v", je)
+		return fmt.Errorf("failed to marshal Build proto to JSON: %v", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.url, bytes.NewBuffer(je))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.url, bytes.NewReader(jb))
 	if err != nil {
 		return fmt.Errorf("failed to create a new HTTP request: %v", err)
 	}

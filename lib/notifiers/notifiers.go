@@ -16,7 +16,6 @@ package notifiers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -36,6 +35,7 @@ import (
 	"github.com/google/cel-go/checker/decls"
 	smpb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1beta1"
 	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
+	"google.golang.org/protobuf/encoding/protojson"
 	"gopkg.in/yaml.v2"
 )
 
@@ -338,7 +338,6 @@ func NewSubscription(ctx context.Context, projectID, subscriberID string) (*pubs
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PubSub client: %v", err)
 	}
-	client.Topic(cloudBuildTopic)
 	return client.Subscription(subscriberID), nil
 }
 
@@ -348,14 +347,24 @@ func NewReceiver(notifier Notifier, cfg *Config) func(context.Context, *pubsub.M
 		log.V(2).Infof("got PubSub message with ID: %q", msg.ID)
 
 		build := new(cbpb.Build)
-		if err := json.Unmarshal(msg.Data, build); err != nil {
+		// Be as lenient as possible in unmarshalling.
+		// `Unmarshal` will fail if we get a payload with a field that is unknown to the current proto version unless `DiscardUnknown` is set.
+		uo := protojson.UnmarshalOptions{
+			AllowPartial:   true,
+			DiscardUnknown: true,
+		}
+		bv2 := proto.MessageV2(build)
+		if err := uo.Unmarshal(msg.Data, bv2); err != nil {
 			log.Errorf("failed to unmarshal PubSub message %q into a Build: %v", msg.ID, err)
+			msg.Nack()
 			return
 		}
+		build = proto.MessageV1(bv2).(*cbpb.Build)
 
 		log.V(2).Infof("got PubSub Build payload:\n%+v\nattempting to send notification", proto.MarshalTextString(build))
 		if err := notifier.SendNotification(ctx, build); err != nil {
 			log.Errorf("failed to run SendNotification: %v", err)
+			msg.Nack()
 			return
 		}
 
