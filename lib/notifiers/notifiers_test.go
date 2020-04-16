@@ -17,15 +17,25 @@ package notifiers
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
+	"cloud.google.com/go/pubsub"
+	"cloud.google.com/go/pubsub/pstest"
+	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/api/option"
+	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func TestMakeCELPredicate(t *testing.T) {
@@ -33,29 +43,59 @@ func TestMakeCELPredicate(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		filter    string
-		event     *CloudBuildEvent
+		build     *cbpb.Build
 		wantMatch bool
 	}{
 		{
 			name:      "id match",
-			filter:    `event.id == "abc"`,
-			event:     &CloudBuildEvent{ID: "abc"},
+			filter:    `build.id == "abc"`,
+			build:     &cbpb.Build{Id: "abc"},
 			wantMatch: true,
 		}, {
 			name:      "id mismatch",
-			filter:    `event.id == "abc"`,
-			event:     &CloudBuildEvent{ID: "def"},
+			filter:    `build.id == "abc"`,
+			build:     &cbpb.Build{Id: "def"},
+			wantMatch: false,
+		}, {
+			name:      "status match",
+			filter:    "build.status ==Build.Status.SUCCESS",
+			build:     &cbpb.Build{Id: "xyz", Status: cbpb.Build_SUCCESS},
+			wantMatch: true,
+		}, {
+			name:      "status mismatch",
+			filter:    "build.status == Build.Status.FAILURE",
+			build:     &cbpb.Build{Id: "zyx", Status: cbpb.Build_WORKING},
+			wantMatch: false,
+		}, {
+			name:      "trigger ID match",
+			filter:    `build.build_trigger_id == "some-id"`,
+			build:     &cbpb.Build{BuildTriggerId: "some-id"},
+			wantMatch: true,
+		}, {
+			name:      "trigger ID mismatch",
+			filter:    `build.build_trigger_id == "other-id"`,
+			build:     &cbpb.Build{BuildTriggerId: "blah-id"},
 			wantMatch: false,
 		}, {
 			name:      "complex filter match",
-			filter:    `event.buildTriggerId == "trigger-id" && event.status == "SUCCESS" && "blah" in event.tags`,
-			event:     &CloudBuildEvent{BuildTriggerID: "trigger-id", Status: "SUCCESS", Tags: []string{"blah"}},
+			filter:    `build.build_trigger_id == "trigger-id" && build.status == Build.Status.SUCCESS && "blah" in build.tags`,
+			build:     &cbpb.Build{BuildTriggerId: "trigger-id", Status: cbpb.Build_SUCCESS, Tags: []string{"blah"}},
 			wantMatch: true,
 		}, {
 			name:      "complex filter mismatch",
-			filter:    `event.buildTriggerId == "trigger-id" && event.status == "SUCCESS" && size(event.tags) == 2 && "bar" in event.tags`,
-			event:     &CloudBuildEvent{BuildTriggerID: "trigger-id", Status: "SUCCESS", Tags: []string{"foo", "baz"}},
+			filter:    `build.build_trigger_id == "trigger-id" && build.status == Build.Status.SUCCESS && size(build.tags) == 2 && "bar" in build.tags`,
+			build:     &cbpb.Build{BuildTriggerId: "trigger-id", Status: cbpb.Build_SUCCESS, Tags: []string{"foo", "baz"}},
 			wantMatch: false,
+		}, {
+			name:      "substitution match",
+			filter:    `"key1" in build.substitutions && build.substitutions["key2"] == "val2"`,
+			build:     &cbpb.Build{Substitutions: map[string]string{"key1": "val1", "key2": "val2"}},
+			wantMatch: true,
+		}, {
+			name:      "images match",
+			filter:    `"gcr.io/example/image-baz" in build.images`,
+			build:     &cbpb.Build{Images: []string{"gcr.io/example/image-foo", "gcr.io/example/image-bar", "gcr.io/example/image-baz"}},
+			wantMatch: true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -64,8 +104,35 @@ func TestMakeCELPredicate(t *testing.T) {
 				t.Fatalf("MakeCELProgram(%q): %v", tc.filter, err)
 			}
 
-			if pred.Apply(ctx, tc.event) != tc.wantMatch {
-				t.Errorf("CELPredicate(%+v) != %v", tc.event, tc.wantMatch)
+			if pred.Apply(ctx, tc.build) != tc.wantMatch {
+				t.Errorf("CELPredicate(%+v) != %v", tc.build, tc.wantMatch)
+			}
+		})
+	}
+}
+
+func TestMakeCELPredicateErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		filter string
+	}{{
+		name:   "bad variable",
+		filter: `event.id == "foo"`,
+	}, {
+		name:   "bad enum usage",
+		filter: `build.status == "SUCCESS"`,
+	}, {
+		name:   "unknown field",
+		filter: `build.salad == "kale"`,
+	}, {
+		name:   "bad result type",
+		filter: `build.id`,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := MakeCELPredicate(tc.filter); err == nil {
+				t.Errorf("MakeCELPredicate(%q) unexpectedly succeeded", tc.filter)
+			} else {
+				t.Logf("MakeCELPredicate(%q) got expected error: %v", tc.filter, err)
 			}
 		})
 	}
@@ -118,12 +185,10 @@ var validConfig = &Config{
 				"third_key": map[interface{}]interface{}{string("foo"): string("bar")},
 			},
 		},
-		Secrets: []*Secret{
-			&Secret{
-				LocalName:    "some-secret",
-				ResourceName: "projects/my-project/secrets/my-secret/versions/latest",
-			},
-		},
+		Secrets: []*Secret{{
+			LocalName:    "some-secret",
+			ResourceName: "projects/my-project/secrets/my-secret/versions/latest",
+		}},
 	},
 }
 
@@ -393,5 +458,126 @@ func TestValidateConfig(t *testing.T) {
 				t.Fatalf("validateConfig(%v) unexpectedly succeeded", tc.cfg)
 			}
 		})
+	}
+}
+
+type fakeNotifier struct {
+	notifs chan *cbpb.Build
+}
+
+func (f *fakeNotifier) SetUp(_ context.Context, _ *Config, _ SecretGetter) error {
+	// Not currently called by any test.
+	return nil
+}
+
+func (f *fakeNotifier) SendNotification(_ context.Context, build *cbpb.Build) error {
+	f.notifs <- proto.Clone(build).(*cbpb.Build)
+	return nil
+}
+
+func TestNewReceiver(t *testing.T) {
+	const projectID = "some-project-id"
+	sentBuild := &cbpb.Build{
+		ProjectId:     projectID,
+		Id:            "some-build-id",
+		Status:        cbpb.Build_FAILURE,
+		Substitutions: map[string]string{"foo": "bar"},
+		Tags:          []string{t.Name()},
+		Images:        []string{"gcr.io/example/image"},
+	}
+	sentBuildV2 := proto.MessageV2(sentBuild)
+	sentJSON, err := protojson.Marshal(sentBuildV2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bc := make(chan *cbpb.Build, 1)
+	fn := &fakeNotifier{notifs: bc}
+
+	ctx := context.Background()
+	srv := pstest.NewServer()
+	defer srv.Close()
+	conn, err := grpc.DialContext(ctx, srv.Addr, grpc.WithInsecure())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	client, err := pubsub.NewClient(ctx, projectID, option.WithGRPCConn(conn))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	// The pstest server needs to be aware of the topic and subscriber ID.
+	const subscriberID = "some-subscriber-id"
+	topic, err := client.CreateTopic(ctx, cloudBuildTopic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = client.CreateSubscription(ctx, subscriberID, pubsub.SubscriptionConfig{Topic: topic}); err != nil {
+		t.Fatal(err)
+	}
+
+	subscriber := client.Subscription(subscriberID)
+
+	// We need to run the subscriber asynchronously since `Receive` blocks until an error or the context is done.
+	// We can tell `Receive` to stop by calling `cancel` (this should not result in an error from `Receive`).
+	// Therefore, run it in an errgroup goroutine to capture any error that occurs.
+	cctx, cancel := context.WithCancel(ctx)
+	erg, ergctx := errgroup.WithContext(cctx)
+	erg.Go(func() error {
+		return subscriber.Receive(ergctx, NewReceiver(fn, validConfig))
+	})
+
+	msgID := srv.Publish(fmt.Sprintf("projects/%s/topics/%s", projectID, cloudBuildTopic), sentJSON, nil)
+
+	// Wait for our fakeNotifier to send us a Build.
+	var gotBuild *cbpb.Build
+	select {
+	case b := <-bc:
+		gotBuild = b
+	case <-time.After(10 * time.Second):
+		t.Fatal("failed to received a Build from the notifier before the timeout")
+	}
+
+	// Now that our notifier has run, we don't need to run the subscriber.
+	cancel()
+
+	// Handle any errors from `Receive`.
+	if err := erg.Wait(); err != nil {
+		t.Error(err)
+	}
+
+	if diff := cmp.Diff(sentBuild, gotBuild); diff != "" {
+		t.Errorf("unexpected difference between published Build and received Build:\n%s", diff)
+	}
+
+	// Now check that we handled the pstest message properly.
+	msgChecker := func() error {
+		msg := srv.Message(msgID)
+		if msg == nil {
+			return fmt.Errorf("message not found for ID %q", msgID)
+		}
+
+		if msg.Deliveries != 1 {
+			return fmt.Errorf("expected 1 delivery on message %q, got %d", msgID, msg.Deliveries)
+		}
+
+		if msg.Acks != 1 {
+			return fmt.Errorf("expected 1 ack on message %q, got %d", msgID, msg.Acks)
+		}
+		return nil
+	}
+	finish := time.Now().Add(10 * time.Second)
+	err = errors.New("fake error for sanity checking")
+	for time.Now().Before(finish) {
+		err = msgChecker()
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		t.Errorf("failed to validate message %q before timeout: %v", msgID, err)
 	}
 }

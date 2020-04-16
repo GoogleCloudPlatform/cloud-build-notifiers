@@ -17,11 +17,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
 	"github.com/nlopes/slack"
+	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 )
 
 const (
@@ -64,13 +64,13 @@ func (s *slackNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg not
 	return nil
 }
 
-func (s *slackNotifier) SendNotification(ctx context.Context, event *notifiers.CloudBuildEvent) error {
-	if !s.filter.Apply(ctx, event) {
+func (s *slackNotifier) SendNotification(ctx context.Context, build *cbpb.Build) error {
+	if !s.filter.Apply(ctx, build) {
 		return nil
 	}
 
-	log.Infof("sending Slack webhook for Build %q (status: %q; created at: %s)", event.ID, event.Status, event.CreateTime.Format(time.RFC3339))
-	msg, err := s.writeMessage(event)
+	log.Infof("sending Slack webhook for Build %q (status: %q)", build.Id, build.Status)
+	msg, err := s.writeMessage(build)
 	if err != nil {
 		return fmt.Errorf("failed to write Slack message: %v", err)
 	}
@@ -78,25 +78,25 @@ func (s *slackNotifier) SendNotification(ctx context.Context, event *notifiers.C
 	return slack.PostWebhook(s.webhookURL, msg)
 }
 
-func (s *slackNotifier) writeMessage(event *notifiers.CloudBuildEvent) (*slack.WebhookMessage, error) {
+func (s *slackNotifier) writeMessage(build *cbpb.Build) (*slack.WebhookMessage, error) {
 	txt := fmt.Sprintf(
 		"Cloud Build (%s, %s): %s",
-		event.ProjectID,
-		event.ID,
-		event.Status,
+		build.ProjectId,
+		build.Id,
+		build.Status,
 	)
 
 	var clr string
-	switch event.Status {
-	case "SUCCESS":
+	switch build.Status {
+	case cbpb.Build_SUCCESS:
 		clr = "good"
-	case "FAILURE", "INTERNAL_ERROR", "TIMEOUT":
+	case cbpb.Build_FAILURE, cbpb.Build_INTERNAL_ERROR, cbpb.Build_TIMEOUT:
 		clr = "danger"
 	default:
 		clr = "warning"
 	}
 
-	logURL, err := notifiers.AddUTMParams(event.LogURL, notifiers.ChatMedium)
+	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.ChatMedium)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add UTM params: %v", err)
 	}
@@ -104,8 +104,10 @@ func (s *slackNotifier) writeMessage(event *notifiers.CloudBuildEvent) (*slack.W
 	atch := slack.Attachment{
 		Text:  txt,
 		Color: clr,
-		Actions: []slack.AttachmentAction{slack.AttachmentAction{
-			Text: "View Logs", Type: "button", URL: logURL,
+		Actions: []slack.AttachmentAction{{
+			Text: "View Logs",
+			Type: "button",
+			URL:  logURL,
 		}},
 	}
 

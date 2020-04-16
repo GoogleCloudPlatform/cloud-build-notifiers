@@ -16,7 +16,6 @@ package notifiers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -31,20 +30,20 @@ import (
 	secretmanager "cloud.google.com/go/secretmanager/apiv1beta1"
 	"cloud.google.com/go/storage"
 	log "github.com/golang/glog"
-	"github.com/golang/protobuf/jsonpb"
-	spb "github.com/golang/protobuf/ptypes/struct"
+	"github.com/golang/protobuf/proto"
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
 	smpb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1beta1"
+	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
+	"google.golang.org/protobuf/encoding/protojson"
 	"gopkg.in/yaml.v2"
 )
 
 const (
-	// CloudBuildTopic is the topic channel used by Cloud Build for sending Build events to Cloud PubSub.
-	CloudBuildTopic = "cloud-builds"
-
-	defaultHTTPPort = "8080"
-	secretRef       = "secretRef"
+	cloudBuildProtoPkg = "google.devtools.cloudbuild.v1"
+	cloudBuildTopic    = "cloud-builds"
+	defaultHTTPPort    = "8080"
+	secretRef          = "secretRef"
 )
 
 var (
@@ -93,52 +92,10 @@ type Secret struct {
 	ResourceName string `yaml:"value"`
 }
 
-// CloudBuildEvent represents the payload of a notification from PubSub.
-// This struct is based on the JSON described here:
-// https://cloud.google.com/cloud-build/docs/api/reference/rest/v1/projects.builds#resource:-build
-type CloudBuildEvent struct {
-	ID        string `json:"id"`
-	ProjectID string `json:"projectId"`
-	Status    string `json:"status"`
-	Source    struct {
-		RepoSource struct {
-			ProjectID  string `json:"projectId"`
-			RepoName   string `json:"repoName"`
-			BranchName string `json:"branchName"`
-		} `json:"repoSource"`
-	} `json:"source"`
-	Steps []struct {
-		Name       string   `json:"name"`
-		Args       []string `json:"args"`
-		ID         string   `json:"id"`
-		WaitFor    []string `json:"waitFor"`
-		Entrypoint string   `json:"entrypoint,omitempty"`
-	} `json:"steps"`
-	CreateTime       time.Time `json:"createTime"`
-	StartTime        time.Time `json:"startTime"`
-	Timeout          string    `json:"timeout"`
-	LogsBucket       string    `json:"logsBucket"`
-	SourceProvenance struct {
-		ResolvedRepoSource struct {
-			ProjectID string `json:"projectId"`
-			RepoName  string `json:"repoName"`
-			CommitSha string `json:"commitSha"`
-		} `json:"resolvedRepoSource"`
-	} `json:"sourceProvenance"`
-	BuildTriggerID string `json:"buildTriggerId"`
-	Options        struct {
-		MachineType        string `json:"machineType"`
-		SubstitutionOption string `json:"substitutionOption"`
-		Logging            string `json:"logging"`
-	} `json:"options"`
-	LogURL string   `json:"logUrl"`
-	Tags   []string `json:"tags"`
-}
-
 // Notifier is the interface type that users should implement for usage in Cloud Build notifiers.
 type Notifier interface {
 	SetUp(context.Context, *Config, SecretGetter) error
-	SendNotification(context.Context, *CloudBuildEvent) error
+	SendNotification(context.Context, *cbpb.Build) error
 }
 
 // SecretGetter allows for fetching secrets from some key store.
@@ -146,31 +103,21 @@ type SecretGetter interface {
 	GetSecret(context.Context, string) (string, error)
 }
 
-// EventFilter is a type that can be used to filter CloudBuildEvents for notifications.
+// EventFilter is a type that can be used to filter Builds for notifications.
 type EventFilter interface {
-	Apply(context.Context, *CloudBuildEvent) bool
+	// Apply returns true iff the EventFilter is able to execute successfully and matches the given Build.
+	Apply(context.Context, *cbpb.Build) bool
 }
 
-// CELPredicate is an EventPredicate that uses a CEL program to apply filtering to CloudBuildEvents.
+// CELPredicate is an EventFilter that uses a CEL program to determine if
+// notifications should be sent for a given Pub/Sub message.
 type CELPredicate struct {
 	prg cel.Program
 }
 
-// Apply returns true iff the underlying CEL program returns true for the given event.
-func (c *CELPredicate) Apply(_ context.Context, event *CloudBuildEvent) bool {
-	eventJSON, err := json.Marshal(event)
-	if err != nil {
-		log.Errorf("failed to convert event into JSON: %v", err)
-		return false
-	}
-
-	var eventProto spb.Struct
-	if err := jsonpb.UnmarshalString(string(eventJSON), &eventProto); err != nil {
-		log.Errorf("failed to convert event JSON into protobuf Struct: %v", err)
-		return false
-	}
-
-	out, _, err := c.prg.Eval(map[string]interface{}{"event": &eventProto})
+// Apply returns true iff the underlying CEL program returns true for the given Build.
+func (c *CELPredicate) Apply(_ context.Context, build *cbpb.Build) bool {
+	out, _, err := c.prg.Eval(map[string]interface{}{"build": build})
 	if err != nil {
 		log.Errorf("failed to evaluate the CEL filter: %v", err)
 		return false
@@ -178,21 +125,11 @@ func (c *CELPredicate) Apply(_ context.Context, event *CloudBuildEvent) bool {
 
 	match, ok := out.Value().(bool)
 	if !ok {
-		log.Errorf("failed to convert output of CEL filter program to a boolean: %v", err)
+		log.Errorf("failed to convert output %v of CEL filter program to a boolean: %v", out, err)
 		return false
 	}
 
 	return match
-}
-
-// TriggerPredicate is an EventPredicate that uses the given Trigger string to match the CloudBuildEvent's BuildTriggerID field.
-type TriggerPredicate struct {
-	Trigger string
-}
-
-// Apply returns true iff the given Trigger string matches the BuildTriggerID field in the CloudBuildEvent.
-func (t *TriggerPredicate) Apply(_ context.Context, event *CloudBuildEvent) bool {
-	return t.Trigger == "" || t.Trigger == event.BuildTriggerID
 }
 
 // Main is a function that can be called by `main()` functions in notifier binaries.
@@ -353,29 +290,31 @@ func validateConfig(cfg *Config) error {
 
 // MakeCELPredicate returns a CELPredicate for the given filter string of CEL code.
 func MakeCELPredicate(filter string) (*CELPredicate, error) {
-	ds := cel.Declarations(
-		// Treat the `event` input as a map[string]interface{} - a.k.a JSON.
-		// We'll use a JSON string unmarshal -> structpb.Struct to get the correct type data.
-		decls.NewIdent("event", decls.NewMapType(decls.String, decls.Dyn), nil),
+	env, err := cel.NewEnv(
+		// Declare the `build` variable for useage in CEL programs.
+		cel.Declarations(decls.NewIdent("build", decls.NewObjectType(cloudBuildProtoPkg+".Build"), nil)),
+		// Register the `Build` type in the environment.
+		cel.Types(new(cbpb.Build)),
+		// `Container` is necessary for better (enum) scoping
+		// (i.e with this, we don't need to use the fully qualified proto path in our programs).
+		cel.Container(cloudBuildProtoPkg),
 	)
-	env, err := cel.NewEnv(ds)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a CEL env: %v", err)
 	}
 
-	ast, celErr := env.Parse(filter)
-	if celErr != nil && celErr.Err() != nil {
-		return nil, fmt.Errorf("failed to parse CEL filter %q: %v", filter, celErr.Err())
+	ast, issues := env.Compile(filter)
+	if issues != nil && issues.Err() != nil {
+		return nil, fmt.Errorf("failed to compile CEL filter %q: %v", filter, issues.Err())
 	}
 
-	ast, celErr = env.Check(ast)
-	if celErr != nil && celErr.Err() != nil {
-		return nil, fmt.Errorf("failed to type check CEL filter %q: %v", filter, celErr.Err())
+	if !proto.Equal(ast.ResultType(), decls.Bool) {
+		return nil, fmt.Errorf("expected CEL filter %q to have a boolean result type, but was %v", filter, ast.ResultType())
 	}
 
-	prg, err := env.Program(ast)
+	prg, err := env.Program(ast, cel.EvalOptions(cel.OptOptimize))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create CEL program: %v", err)
+		return nil, fmt.Errorf("failed to create CEL program from filter %q: %v", filter, err)
 	}
 
 	return &CELPredicate{prg}, nil
@@ -398,21 +337,7 @@ func NewSubscription(ctx context.Context, projectID, subscriberID string) (*pubs
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PubSub client: %v", err)
 	}
-	client.Topic(CloudBuildTopic)
 	return client.Subscription(subscriberID), nil
-}
-
-func prettyEventJSON(event *CloudBuildEvent) (string, error) {
-	bs, err := json.MarshalIndent(event, "", "    ")
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal JSON: %v", err)
-	}
-	return string(bs), nil
-}
-
-func lessPrettyEventJSON(event *CloudBuildEvent) (string, error) {
-	bs, err := json.Marshal(event)
-	return string(bs), err
 }
 
 // NewReceiver returns a PubSub receiving function that calls the given notifier, using and passing the Config as necessary.
@@ -420,20 +345,29 @@ func NewReceiver(notifier Notifier, cfg *Config) func(context.Context, *pubsub.M
 	return func(ctx context.Context, msg *pubsub.Message) {
 		log.V(2).Infof("got PubSub message with ID: %q", msg.ID)
 
-		event := new(CloudBuildEvent)
-		if err := json.Unmarshal(msg.Data, event); err != nil {
-			log.Errorf("failed to unmarshal PubSub message %q into CloudBuildEvent: %v", msg.ID, err)
+		build := new(cbpb.Build)
+		// Be as lenient as possible in unmarshalling.
+		// `Unmarshal` will fail if we get a payload with a field that is unknown to the current proto version unless `DiscardUnknown` is set.
+		uo := protojson.UnmarshalOptions{
+			AllowPartial:   true,
+			DiscardUnknown: true,
+		}
+		bv2 := proto.MessageV2(build)
+		if err := uo.Unmarshal(msg.Data, bv2); err != nil {
+			log.Errorf("failed to unmarshal PubSub message %q into a Build: %v", msg.ID, err)
+			msg.Nack()
 			return
 		}
+		build = proto.MessageV1(bv2).(*cbpb.Build)
 
-		log.V(2).Infof("got PubSub Event payload: %+v", event)
-		log.V(2).Infoln("attempting to send notification")
-		if err := notifier.SendNotification(ctx, event); err != nil {
+		log.V(2).Infof("got PubSub Build payload:\n%+v\nattempting to send notification", proto.MarshalTextString(build))
+		if err := notifier.SendNotification(ctx, build); err != nil {
 			log.Errorf("failed to run SendNotification: %v", err)
+			msg.Nack()
 			return
 		}
 
-		log.V(2).Infof("acking PubSub message %q with Event payload:\n%v", msg.ID, event)
+		log.V(2).Infof("acking PubSub message %q with Build payload:\n%v", msg.ID, proto.MarshalTextString(build))
 		msg.Ack()
 	}
 }

@@ -33,7 +33,7 @@ func TestSetUp(t *testing.T) {
 		cfg: &notifiers.Config{
 			Spec: &notifiers.Spec{
 				Notification: &notifiers.Notification{
-					Filter: `event.status == "SUCCESS"`,
+					Filter: `build.status == Build.Status.SUCCESS`,
 					Delivery: map[string]interface{}{
 						"url": url,
 					},
@@ -70,7 +70,7 @@ func TestSetUp(t *testing.T) {
 		cfg: &notifiers.Config{
 			Spec: &notifiers.Spec{
 				Notification: &notifiers.Notification{
-					Filter: `event.status == "SUCCESS"`,
+					Filter: `build.status == Build.Status.SUCCESS`,
 					Delivery: map[string]interface{}{
 						"foo": "bar",
 					},
@@ -83,7 +83,7 @@ func TestSetUp(t *testing.T) {
 		cfg: &notifiers.Config{
 			Spec: &notifiers.Spec{
 				Notification: &notifiers.Notification{
-					Filter: `event.status == "SUCCESS"`,
+					Filter: `build.status == Build.Status.SUCCESS`,
 					Delivery: map[string]interface{}{
 						"url": 404,
 					},
