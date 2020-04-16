@@ -303,19 +303,18 @@ func MakeCELPredicate(filter string) (*CELPredicate, error) {
 		return nil, fmt.Errorf("failed to create a CEL env: %v", err)
 	}
 
-	ast, celErr := env.Parse(filter)
-	if celErr != nil && celErr.Err() != nil {
-		return nil, fmt.Errorf("failed to parse CEL filter %q: %v", filter, celErr.Err())
+	ast, issues := env.Compile(filter)
+	if issues != nil && issues.Err() != nil {
+		return nil, fmt.Errorf("failed to compile CEL filter %q: %v", filter, issues.Err())
 	}
 
-	ast, celErr = env.Check(ast)
-	if celErr != nil && celErr.Err() != nil {
-		return nil, fmt.Errorf("failed to type check CEL filter %q: %v", filter, celErr.Err())
+	if !proto.Equal(ast.ResultType(), decls.Bool) {
+		return nil, fmt.Errorf("expected CEL filter %q to have a boolean result type, but was %v", filter, ast.ResultType())
 	}
 
-	prg, err := env.Program(ast)
+	prg, err := env.Program(ast, cel.EvalOptions(cel.OptOptimize))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create CEL program: %v", err)
+		return nil, fmt.Errorf("failed to create CEL program from filter %q: %v", filter, err)
 	}
 
 	return &CELPredicate{prg}, nil

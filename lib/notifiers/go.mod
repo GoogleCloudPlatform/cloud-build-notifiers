@@ -8,7 +8,7 @@ require (
 	cloud.google.com/go/storage v1.5.0
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/protobuf v1.4.0
-	github.com/google/cel-go v0.3.2
+	github.com/google/cel-go v0.4.1
 	github.com/google/go-cmp v0.4.0
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e

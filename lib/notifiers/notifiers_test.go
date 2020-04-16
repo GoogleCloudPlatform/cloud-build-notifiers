@@ -111,6 +111,33 @@ func TestMakeCELPredicate(t *testing.T) {
 	}
 }
 
+func TestMakeCELPredicateErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		filter string
+	}{{
+		name:   "bad variable",
+		filter: `event.id == "foo"`,
+	}, {
+		name:   "bad enum usage",
+		filter: `build.status == "SUCCESS"`,
+	}, {
+		name:   "unknown field",
+		filter: `build.salad == "kale"`,
+	}, {
+		name:   "bad result type",
+		filter: `build.id`,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := MakeCELPredicate(tc.filter); err == nil {
+				t.Errorf("MakeCELPredicate(%q) unexpectedly succeeded", tc.filter)
+			} else {
+				t.Logf("MakeCELPredicate(%q) got expected error: %v", tc.filter, err)
+			}
+		})
+	}
+}
+
 type fakeGCSReaderFactory struct {
 	// A mapping of "gs://"+bucket+"/"+object -> content.
 	data map[string]string
@@ -435,7 +462,6 @@ func TestValidateConfig(t *testing.T) {
 }
 
 type fakeNotifier struct {
-	gotCfg *Config
 	notifs chan *cbpb.Build
 }
 
