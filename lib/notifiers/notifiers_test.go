@@ -96,6 +96,16 @@ func TestMakeCELPredicate(t *testing.T) {
 			filter:    `"gcr.io/example/image-baz" in build.images`,
 			build:     &cbpb.Build{Images: []string{"gcr.io/example/image-foo", "gcr.io/example/image-bar", "gcr.io/example/image-baz"}},
 			wantMatch: true,
+		}, {
+			name:      "status list match",
+			filter:    `build.status in [Build.Status.SUCCESS, Build.Status.FAILURE]`,
+			build:     &cbpb.Build{Status: cbpb.Build_FAILURE},
+			wantMatch: true,
+		}, {
+			name:      "substitutions mismatch",
+			filter:    `build.substitutions["DINNER"] == "PIZZA"`,
+			build:     &cbpb.Build{Substitutions: map[string]string{"DESSERT": "CANNOLI"}},
+			wantMatch: false,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
