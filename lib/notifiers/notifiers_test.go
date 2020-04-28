@@ -17,24 +17,22 @@ package notifiers
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
 
-	"cloud.google.com/go/pubsub"
-	"cloud.google.com/go/pubsub/pstest"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"golang.org/x/sync/errgroup"
-	"google.golang.org/api/option"
 	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
-	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -501,46 +499,27 @@ func TestNewReceiver(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	pspw := &pubSubPushWrapper{
+		Message:      pubSubPushMessage{Data: sentJSON, ID: "id-do-not-care"},
+		Subscription: "subscriber-do-not-care",
+	}
+
+	j, err := json.Marshal(pspw)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	bc := make(chan *cbpb.Build, 1)
 	fn := &fakeNotifier{notifs: bc}
 
-	ctx := context.Background()
-	srv := pstest.NewServer()
-	defer srv.Close()
-	conn, err := grpc.DialContext(ctx, srv.Addr, grpc.WithInsecure())
-	if err != nil {
-		t.Fatal(err)
+	handler := newReceiver(fn)
+	req := httptest.NewRequest(http.MethodPost, "http://notifer.example.com/", bytes.NewBuffer(j))
+	w := httptest.NewRecorder()
+
+	handler(w, req)
+	if s := w.Result().StatusCode; s != http.StatusOK {
+		t.Errorf("result.StatusCode = %d, expected %d", s, http.StatusOK)
 	}
-	defer conn.Close()
-
-	client, err := pubsub.NewClient(ctx, projectID, option.WithGRPCConn(conn))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer client.Close()
-
-	// The pstest server needs to be aware of the topic and subscriber ID.
-	const subscriberID = "some-subscriber-id"
-	topic, err := client.CreateTopic(ctx, cloudBuildTopic)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = client.CreateSubscription(ctx, subscriberID, pubsub.SubscriptionConfig{Topic: topic}); err != nil {
-		t.Fatal(err)
-	}
-
-	subscriber := client.Subscription(subscriberID)
-
-	// We need to run the subscriber asynchronously since `Receive` blocks until an error or the context is done.
-	// We can tell `Receive` to stop by calling `cancel` (this should not result in an error from `Receive`).
-	// Therefore, run it in an errgroup goroutine to capture any error that occurs.
-	cctx, cancel := context.WithCancel(ctx)
-	erg, ergctx := errgroup.WithContext(cctx)
-	erg.Go(func() error {
-		return subscriber.Receive(ergctx, NewReceiver(fn, validConfig))
-	})
-
-	msgID := srv.Publish(fmt.Sprintf("projects/%s/topics/%s", projectID, cloudBuildTopic), sentJSON, nil)
 
 	// Wait for our fakeNotifier to send us a Build.
 	var gotBuild *cbpb.Build
@@ -551,43 +530,83 @@ func TestNewReceiver(t *testing.T) {
 		t.Fatal("failed to received a Build from the notifier before the timeout")
 	}
 
-	// Now that our notifier has run, we don't need to run the subscriber.
-	cancel()
-
-	// Handle any errors from `Receive`.
-	if err := erg.Wait(); err != nil {
-		t.Error(err)
-	}
-
 	if diff := cmp.Diff(sentBuild, gotBuild); diff != "" {
 		t.Errorf("unexpected difference between published Build and received Build:\n%s", diff)
 	}
 
-	// Now check that we handled the pstest message properly.
-	msgChecker := func() error {
-		msg := srv.Message(msgID)
-		if msg == nil {
-			return fmt.Errorf("message not found for ID %q", msgID)
-		}
+}
 
-		if msg.Deliveries != 1 {
-			return fmt.Errorf("expected 1 delivery on message %q, got %d", msgID, msg.Deliveries)
-		}
+type errNotifier struct {
+	err error
+}
 
-		if msg.Acks != 1 {
-			return fmt.Errorf("expected 1 ack on message %q, got %d", msgID, msg.Acks)
-		}
-		return nil
-	}
-	finish := time.Now().Add(10 * time.Second)
-	err = errors.New("fake error for sanity checking")
-	for time.Now().Before(finish) {
-		err = msgChecker()
-		if err == nil {
-			break
-		}
-	}
+func (n *errNotifier) SetUp(_ context.Context, _ *Config, _ SecretGetter) error {
+	return nil
+}
+func (n *errNotifier) SendNotification(_ context.Context, _ *cbpb.Build) error {
+	return n.err
+}
+
+func wrapperToBuffer(t *testing.T, w *pubSubPushWrapper) *bytes.Buffer {
+	t.Helper()
+	j, err := json.Marshal(w)
 	if err != nil {
-		t.Errorf("failed to validate message %q before timeout: %v", msgID, err)
+		t.Fatal(err)
+	}
+	return bytes.NewBuffer(j)
+}
+
+func buildToBuffer(t *testing.T, b *cbpb.Build) *bytes.Buffer {
+	t.Helper()
+	b2 := proto.MessageV2(b)
+	j, err := protojson.Marshal(b2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return wrapperToBuffer(t, &pubSubPushWrapper{
+		Subscription: "subscriber-does-not-matter",
+		Message:      pubSubPushMessage{ID: "id-does-not-matter", Data: j},
+	})
+}
+
+func TestNewReceiverError(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		body     *bytes.Buffer
+		sendErr  error
+		wantCode int
+	}{
+		{
+			name:     "empty body",
+			body:     new(bytes.Buffer),
+			wantCode: http.StatusBadRequest,
+		}, {
+			name:     "empty wrapper",
+			body:     wrapperToBuffer(t, &pubSubPushWrapper{}),
+			wantCode: http.StatusBadRequest,
+		}, {
+			name:     "bad data",
+			body:     wrapperToBuffer(t, &pubSubPushWrapper{Message: pubSubPushMessage{Data: []byte(`#corrupted#`)}}),
+			wantCode: http.StatusBadRequest,
+		}, {
+			name:     "send notification error",
+			body:     buildToBuffer(t, new(cbpb.Build)),
+			sendErr:  errors.New("failed to reticulate splines"),
+			wantCode: http.StatusInternalServerError,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := newReceiver(&errNotifier{tc.sendErr})
+
+			req := httptest.NewRequest(http.MethodPost, "http://notifer.example.com/", tc.body)
+			w := httptest.NewRecorder()
+
+			handler(w, req)
+
+			if s := w.Result().StatusCode; s != tc.wantCode {
+				t.Errorf("result.StatusCode = %d, expected %d", s, tc.wantCode)
+			}
+		})
 	}
 }
