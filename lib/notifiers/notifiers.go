@@ -16,17 +16,18 @@ package notifiers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
 
-	"cloud.google.com/go/pubsub"
 	secretmanager "cloud.google.com/go/secretmanager/apiv1beta1"
 	"cloud.google.com/go/storage"
 	log "github.com/golang/glog"
@@ -92,6 +93,17 @@ type Secret struct {
 	ResourceName string `yaml:"value"`
 }
 
+// Copied from https://cloud.google.com/run/docs/tutorials/pubsub#looking_at_the_code.
+type pubSubPushMessage struct {
+	Data []byte `json:"data,omitempty"`
+	ID   string `json:"id"`
+}
+
+type pubSubPushWrapper struct {
+	Message      pubSubPushMessage
+	Subscription string `json:"subscription"`
+}
+
 // Notifier is the interface type that users should implement for usage in Cloud Build notifiers.
 type Notifier interface {
 	SetUp(context.Context, *Config, SecretGetter) error
@@ -143,19 +155,7 @@ func Main(notifier Notifier) error {
 		return nil
 	}
 
-	projectID, ok := GetEnv("PROJECT_ID")
-	if !ok {
-		return errors.New("expected PROJECT_ID to be non-empty")
-	}
-
 	ctx := context.Background()
-
-	subscriberID, ok := GetEnv("SUBSCRIBER_ID")
-	if !ok {
-		return errors.New("expected SUBSCRIBER_ID to be non-empty")
-	}
-
-	log.V(2).Infof("Cloud PubSub subscriber ID is: %q", subscriberID)
 
 	cfgPath, ok := GetEnv("CONFIG_PATH")
 	if !ok {
@@ -187,25 +187,18 @@ func Main(notifier Notifier) error {
 		return fmt.Errorf("failed to call SetUp on notifier: %v", err)
 	}
 
-	sub, err := NewSubscription(ctx, projectID, subscriberID)
-	if err != nil {
-		return fmt.Errorf("failed to create PubSub subscription: %v", err)
-	}
+	log.V(2).Infoln("starting HTTP server...")
 
-	// We need to start up both receivers in parallel of eachother.
-	// We need an HTTP handler on the given PORT to satisfy Cloud Run's health checks.
-	log.V(2).Infof("starting PubSub (%q) and HTTP handlers...\n", subscriberID)
+	// Our Pub/Sub push receiver.
+	http.HandleFunc("/", newReceiver(notifier))
 
-	// Run the receiver in a goroutine because `sub.Receive` blocks and so does the HTTP server below.
-	go func() {
-		// TODO(ljr): Any error here should probably be bubbled-up and crash the main process.
-		if err := sub.Receive(ctx, NewReceiver(notifier, cfg)); err != nil {
-			log.Errorf("failed to properly send notification for received PubSub message: %v", err)
-		}
-	}()
-
-	http.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprintf(w, "Greetings from a Google Cloud Build notifier: %T! (Time: %s)", notifier, time.Now().String())
+	// An auxilliary, healthz-style receiver.
+	// You can call this endpoint using the curl command here:
+	// https://cloud.google.com/run/docs/triggering/https-request#creating_private_services.
+	startTime := time.Now()
+	http.HandleFunc("/helloz", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprintf(w, "Greetings from a Google Cloud Build notifier: %T!\nStart Time: %s\nCurrent Time: %s\n",
+			notifier, startTime.Format(time.RFC1123), time.Now().Format(time.RFC1123))
 	})
 
 	var port string
@@ -216,7 +209,7 @@ func Main(notifier Notifier) error {
 		port = defaultHTTPPort
 	}
 
-	// Block on the HTTP handler server while the PubSub handler is blocked in the goroutine above.
+	// Block on the HTTP's health.
 	return http.ListenAndServe(":"+port, nil)
 }
 
@@ -331,19 +324,25 @@ func GetEnv(name string) (string, bool) {
 	return val, val != ""
 }
 
-// NewSubscription returns a Cloud PubSub subscription for the given project and subscriber IDs.
-func NewSubscription(ctx context.Context, projectID, subscriberID string) (*pubsub.Subscription, error) {
-	client, err := pubsub.NewClient(ctx, projectID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create PubSub client: %v", err)
-	}
-	return client.Subscription(subscriberID), nil
-}
+// newReceiver returns a Pub/Sub push HTTP receiving http.HandlerFunc that calls the given notifier.
+func newReceiver(notifier Notifier) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		var pspw pubSubPushWrapper
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			log.Errorf("failed to read request message: %v", err)
+			http.Error(w, "Bad request body", http.StatusBadRequest)
+			return
+		}
 
-// NewReceiver returns a PubSub receiving function that calls the given notifier, using and passing the Config as necessary.
-func NewReceiver(notifier Notifier, cfg *Config) func(context.Context, *pubsub.Message) {
-	return func(ctx context.Context, msg *pubsub.Message) {
-		log.V(2).Infof("got PubSub message with ID: %q", msg.ID)
+		if err := json.Unmarshal(body, &pspw); err != nil {
+			log.Errorf("failed to unmarshal body %q: %v", body, err)
+			http.Error(w, "Bad pubsub.Message JSON", http.StatusBadRequest)
+			return
+		}
+
+		log.V(2).Infof("got PubSub message with ID %q from subscription %q", pspw.Message.ID, pspw.Subscription)
 
 		build := new(cbpb.Build)
 		// Be as lenient as possible in unmarshalling.
@@ -353,9 +352,9 @@ func NewReceiver(notifier Notifier, cfg *Config) func(context.Context, *pubsub.M
 			DiscardUnknown: true,
 		}
 		bv2 := proto.MessageV2(build)
-		if err := uo.Unmarshal(msg.Data, bv2); err != nil {
-			log.Errorf("failed to unmarshal PubSub message %q into a Build: %v", msg.ID, err)
-			msg.Nack()
+		if err := uo.Unmarshal(pspw.Message.Data, bv2); err != nil {
+			log.Errorf("failed to unmarshal PubSub message %q into a Build: %v", pspw.Message.ID, err)
+			http.Error(w, "Bad Cloud Build Pub/Sub data", http.StatusBadRequest)
 			return
 		}
 		build = proto.MessageV1(bv2).(*cbpb.Build)
@@ -363,12 +362,11 @@ func NewReceiver(notifier Notifier, cfg *Config) func(context.Context, *pubsub.M
 		log.V(2).Infof("got PubSub Build payload:\n%+v\nattempting to send notification", proto.MarshalTextString(build))
 		if err := notifier.SendNotification(ctx, build); err != nil {
 			log.Errorf("failed to run SendNotification: %v", err)
-			msg.Nack()
+			http.Error(w, "failed to send notification", http.StatusInternalServerError)
 			return
 		}
 
-		log.V(2).Infof("acking PubSub message %q with Build payload:\n%v", msg.ID, proto.MarshalTextString(build))
-		msg.Ack()
+		log.V(2).Infof("acking PubSub message %q with Build payload:\n%v", pspw.Message.ID, proto.MarshalTextString(build))
 	}
 }
 
