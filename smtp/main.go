@@ -127,13 +127,13 @@ func getMailConfig(ctx context.Context, sg notifiers.SecretGetter, spec *notifie
 }
 
 func (s *smtpNotifier) SendNotification(ctx context.Context, build *cbpb.Build) error {
-	if s.filter.Apply(ctx, build) {
-		log.Infof("sending mail for event:\n%s", proto.MarshalTextString(build))
-		return s.sendSMTPNotification(build)
+	if !s.filter.Apply(ctx, build) {
+		log.V(2).Infof("no mail for event:\n%s", proto.MarshalTextString(build))
+		return nil
 	}
 
-	log.V(2).Infof("no mail for event:\n%s", proto.MarshalTextString(build))
-	return nil
+	log.Infof("sending email for (build id = %q, status = %s)", build.GetId(), build.GetStatus())
+	return s.sendSMTPNotification(build)
 }
 
 func (s *smtpNotifier) sendSMTPNotification(build *cbpb.Build) error {
