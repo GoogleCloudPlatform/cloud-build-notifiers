@@ -34,6 +34,10 @@ There are currently 3 supported notifier types:
 
 **Note: Docs are only available to Cloud Build Alpha users.**
 
+A setup script exists that should automate _most_ of the notifier setup.
+
+Run `./setup.sh --help` for usage instructions.
+
 ## License
 
 This project uses an [Apache 2.0 license](./LICENSE.txt).
