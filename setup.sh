@@ -63,6 +63,10 @@ main () {
     fail "expected to run from the root of the cloud-build-notifiers repo"
   fi
 
+  if [ ! -r "${SOURCE_CONFIG_PATH}" ]; then
+    fail "expected file at local source config path ${SOURCE_CONFIG_PATH} to be readable"
+  fi
+
   # Project ID, assumed to NOT be org-scoped (only alphanumeric and dashes).
   PROJECT_ID=$(gcloud config get-value project) \
     || fail "could not get default project"
