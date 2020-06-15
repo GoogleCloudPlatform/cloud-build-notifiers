@@ -2,6 +2,7 @@
 # Copyright 2020 Google LLC
 # Author: lru@google.com (Leo Rudberg)
 
+set -u
 
 HELP="
 Cloud Build Notifiers setup script.
@@ -38,6 +39,7 @@ For help/usage:
 
 
 main () {
+  # Simple argument checks.
   if [ "$*" = "--help" ]; then
     echo "${HELP}"
     exit 0
@@ -45,10 +47,16 @@ main () {
     fail "${HELP}"
   fi
 
-  # Set bash settings after initializing "static" global variables so they are
-  # not echoed in the output unnecessarily.
-  set -ux
+  # Check that the user is using a supported notifier type in the correct
+  # directory.
+  case "${NOTIFIER_TYPE}" in
+  http|smtp|slack) ;;
+  *) fail "${HELP}"
+  esac
 
+  if [ ! -d "${NOTIFIER_TYPE}" ]; then
+    fail "expected to run from the root of the cloud-build-notifiers repo"
+  fi
 
   NOTIFIER_TYPE="$1"
   SOURCE_CONFIG_PATH="$2"
@@ -76,16 +84,9 @@ main () {
   INVOKER_SA="cloud-run-pubsub-invoker@${PROJECT_ID}.iam.gserviceaccount.com"
   PUBSUB_SA="service-${PROJECT_NUMBER}@gcp-sa-pubsub.iam.gserviceaccount.com"
 
-  # Check that the user is using a supported notifier type in the correct
-  # directory.
-  case "${NOTIFIER_TYPE}" in
-  http|smtp|slack) ;;
-  *) fail "${HELP}"
-  esac
-
-  if [ ! -d "${NOTIFIER_TYPE}" ]; then
-    fail "expected to run from the root of the cloud-build-notifiers repo"
-  fi
+  # Turn on command echoing after all of the variables have been set so we
+  # don't log spam unnecessarily.
+  set -x
 
   if [ -n "${SECRET_NAME}" ]; then
     add_secret_name_accessor_permission
