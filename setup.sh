@@ -47,6 +47,11 @@ main () {
     fail "${HELP}"
   fi
 
+
+  NOTIFIER_TYPE="$1"
+  SOURCE_CONFIG_PATH="$2"
+  SECRET_NAME="${3:-}" # Optional secret_name name.
+
   # Check that the user is using a supported notifier type in the correct
   # directory.
   case "${NOTIFIER_TYPE}" in
@@ -58,9 +63,6 @@ main () {
     fail "expected to run from the root of the cloud-build-notifiers repo"
   fi
 
-  NOTIFIER_TYPE="$1"
-  SOURCE_CONFIG_PATH="$2"
-  SECRET_NAME="${3:-}" # Optional secret_name name.
   # Project ID, assumed to NOT be org-scoped (only alphanumeric and dashes).
   PROJECT_ID=$(gcloud config get-value project) \
     || fail "could not get default project"
@@ -74,6 +76,7 @@ main () {
   PROJECT_NUMBER=$(gcloud projects describe "${PROJECT_ID}" \
     --format="value(projectNumber)") \
     || fail "could not get project number"
+
   SOURCE_CONFIG_BASENAME=$(basename "${SOURCE_CONFIG_PATH}")
   DESTINATION_BUCKET_NAME="${PROJECT_ID}-notifiers-config"
   DESTINATION_BUCKET_URI="gs://${DESTINATION_BUCKET_NAME}"
