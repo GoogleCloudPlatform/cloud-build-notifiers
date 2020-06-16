@@ -46,8 +46,8 @@ type smtpNotifier struct {
 }
 
 type mailConfig struct {
-	server, port, sender, password string
-	recipients                     []string
+	server, port, sender, from, password string
+	recipients                           []string
 }
 
 func (s *smtpNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg notifiers.SecretGetter) error {
@@ -88,6 +88,11 @@ func getMailConfig(ctx context.Context, sg notifiers.SecretGetter, spec *notifie
 		return mailConfig{}, fmt.Errorf("expected delivery config %v to have string field `sender`", delivery)
 	}
 
+	from, ok := delivery["from"].(string)
+	if !ok {
+		return mailConfig{}, fmt.Errorf("expected delivery config %v to have string field `from`", delivery)
+	}
+
 	ris, ok := delivery["recipients"].([]interface{})
 	if !ok {
 		return mailConfig{}, fmt.Errorf("expected delivery config %v to have repeated field `recipients`", delivery)
@@ -121,6 +126,7 @@ func getMailConfig(ctx context.Context, sg notifiers.SecretGetter, spec *notifie
 		server:     server,
 		port:       port,
 		sender:     sender,
+		from:       from,
 		password:   password,
 		recipients: recipients,
 	}, nil
@@ -145,7 +151,7 @@ func (s *smtpNotifier) sendSMTPNotification(build *cbpb.Build) error {
 	addr := fmt.Sprintf("%s:%s", s.mcfg.server, s.mcfg.port)
 	auth := smtp.PlainAuth("", s.mcfg.sender, s.mcfg.password, s.mcfg.server)
 
-	if err = smtp.SendMail(addr, auth, s.mcfg.sender, s.mcfg.recipients, []byte(email)); err != nil {
+	if err = smtp.SendMail(addr, auth, s.mcfg.from, s.mcfg.recipients, []byte(email)); err != nil {
 		return fmt.Errorf("failed to send email: %v", err)
 	}
 	log.V(2).Infoln("email sent successfully")
@@ -167,7 +173,10 @@ func (s *smtpNotifier) buildEmail(build *cbpb.Build) (string, error) {
 	subject := fmt.Sprintf("Cloud Build [%s]: %s", build.ProjectId, build.Id)
 
 	header := make(map[string]string)
-	header["From"] = s.mcfg.sender
+	if s.mcfg.from != s.mcfg.sender {
+		header["Sender"] = s.mcfg.sender
+	}
+	header["From"] = s.mcfg.from
 	header["To"] = strings.Join(s.mcfg.recipients, ",")
 	header["Subject"] = subject
 	header["MIME-Version"] = "1.0"
