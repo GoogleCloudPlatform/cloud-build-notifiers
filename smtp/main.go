@@ -173,7 +173,7 @@ func (s *smtpNotifier) buildEmail(build *cbpb.Build) (string, error) {
 	subject := fmt.Sprintf("Cloud Build [%s]: %s", build.ProjectId, build.Id)
 
 	header := make(map[string]string)
-	header["From"] = s.mcfg.sender
+	header["From"] = s.mcfg.from
 	header["To"] = strings.Join(s.mcfg.recipients, ",")
 	header["Subject"] = subject
 	header["MIME-Version"] = "1.0"
