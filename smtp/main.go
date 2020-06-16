@@ -173,6 +173,9 @@ func (s *smtpNotifier) buildEmail(build *cbpb.Build) (string, error) {
 	subject := fmt.Sprintf("Cloud Build [%s]: %s", build.ProjectId, build.Id)
 
 	header := make(map[string]string)
+	if s.mcfg.from != s.mcfg.sender {
+		header["Sender"] = s.mcfg.sender
+	}
 	header["From"] = s.mcfg.from
 	header["To"] = strings.Join(s.mcfg.recipients, ",")
 	header["Subject"] = subject
