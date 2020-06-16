@@ -53,6 +53,7 @@ func TestGetMailConfig(t *testing.T) {
 						"port":       "4040",
 						"password":   map[interface{}]interface{}{"secretRef": "my-smtp-password"},
 						"sender":     "me@example.com",
+						"from":       "another_me@example.com",
 						"recipients": []interface{}{"my-cto@example.com", "my-friend@example.com"},
 					},
 				},
@@ -63,6 +64,7 @@ func TestGetMailConfig(t *testing.T) {
 				port:       "4040",
 				password:   password,
 				sender:     "me@example.com",
+				from:       "another_me@example.com",
 				recipients: []string{"my-cto@example.com", "my-friend@example.com"},
 			},
 		}, {
@@ -73,6 +75,7 @@ func TestGetMailConfig(t *testing.T) {
 						"port":       "4040",
 						"password":   map[interface{}]interface{}{"secretRef": "my-smtp-password"},
 						"sender":     "me@example.com",
+						"from":       "another_me@example.com",
 						"recipients": []interface{}{"my-cto@example.com", "my-friend@example.com"},
 					},
 				},
@@ -112,6 +115,7 @@ spec:
       server: smtp.example.com
       port: '587'
       sender: my-notifier@example.com
+      from: my-notifier-from@example.com
       password:
         secretRef: smtp-password
       recipients:
@@ -127,6 +131,7 @@ spec:
 		port:       "587",
 		password:   password,
 		sender:     "my-notifier@example.com",
+		from:       "my-notifier-from@example.com",
 		recipients: []string{"some-eng@example.com", "me@example.com"},
 	}
 
