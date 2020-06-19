@@ -1,0 +1,8 @@
+apiVersion: cloud-build-notifiers/v1alpha1
+kind: BigQueryNotifier
+metadata:
+  name: example-bigquery-notifier
+spec:
+  notification:
+    filter: build.status == Build.Status.SUCCESS
+    table: 
