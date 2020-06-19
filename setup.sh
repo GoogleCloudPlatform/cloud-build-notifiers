@@ -59,7 +59,6 @@ main () {
   *) fail "${HELP}"
   esac
 
-  echo "HOOLI HOODU"
   echo "${SOURCE_CONFIG_PATH}"
 
   if [ ! -d "${NOTIFIER_TYPE}" ]; then
