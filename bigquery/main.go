@@ -77,13 +77,13 @@ func (bq *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg notif
 	// table existence check
 	_, err = bq.table.Metadata(ctx)
 	if err != nil {
-		// create table
 		schema, err := bigquery.InferSchema(bqRow{})
 		if err != nil {
 			// failed to infer schema
 			fmt.Println("Failed to infer schema")
 		}
 		tableMD := bigquery.TableMetadata{Name: table, Schema: schema}
+		// create table
 		if err := bq.table.Create(ctx, &tableMD); err != nil {
 			return fmt.Errorf("Failed to initialize table %v: %v", table, err)
 		}
