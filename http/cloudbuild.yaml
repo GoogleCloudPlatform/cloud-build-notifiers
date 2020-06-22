@@ -15,6 +15,7 @@
 steps:
 # Build the binary and put it into the builder image.
 - name: gcr.io/cloud-builders/docker
+  id: build-http-notifier
   args:
     - build
     - -t
@@ -35,3 +36,6 @@ substitutions:
   # The container registry path to use for uploading the newly built image.
   # For example, this could be 'gcr.io/<your-project-id>/notifiers/http'.
   _IMAGE_PATH: <image-path-here>
+
+tags:
+  - cloud-build-notifiers-http

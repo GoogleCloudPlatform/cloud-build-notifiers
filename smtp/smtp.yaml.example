@@ -23,6 +23,7 @@ spec:
       server: smtp.gmail.com
       port: '587'
       sender: example-sender@gmail.com
+      from: example-from@gmail.com
       recipients:
         - example-devs@gmail.com
         - example-cto@gmail.com
