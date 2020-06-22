@@ -40,7 +40,7 @@ Run `./setup.sh --help` for usage instructions.
 
 ## License
 
-This project uses an [Apache 2.0 license](./LICENSE.txt).
+This project uses an [Apache 2.0 license](./LICENSE).
 
 ## Contributing
 
