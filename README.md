@@ -38,6 +38,40 @@ A setup script exists that should automate _most_ of the notifier setup.
 
 Run `./setup.sh --help` for usage instructions.
 
+## Common Flags
+
+The following are flags that belong to every notifier via inclusion of the `lib/notifiers` library.
+
+### `--smoketest`
+
+This flag starts up the notifier image but only logs the notifier name (via type) and then exits.
+
+### `--setup_check`
+
+This flag starts up the notifier, which does the following:
+
+1. Read the notifier configuration YAML from STDIN.
+1. Decode it into a configuration object.
+1. Attempt to call `notifier.SetUp` on the given notifier using the configuration and a faked-out `SecretGetter`.
+1. Exit successfully unless one of the previous steps failed.
+
+This can be done using the following commands:
+
+```bash
+# First build the notifier locally.
+$ sudo docker build . \
+    -f=./${NOTIFIER_TYPE}/Dockerfile --tag=${NOTIFIER_TYPE}-test
+# Then run the `setup_check` with your YAML.
+# --interactive to allow reading from STDIN.
+# --rm to clean/remove the image once it exits.
+$ sudo docker run \
+    --interactive \
+    --rm \ 
+    --name=${NOTIFIER_TYPE}-test \
+    ${NOTIFIER_TYPE}-test:latest --setup_check --alsologtostderr -v=5 \
+    < path/to/my/config.yaml 
+```
+
 ## License
 
 This project uses an [Apache 2.0 license](./LICENSE).
