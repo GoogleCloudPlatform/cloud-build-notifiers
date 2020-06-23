@@ -77,7 +77,7 @@ func (bq *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) e
 		return nil
 	}
 	if build.BuildTriggerId == "" {
-		log.Warningf("Build passes filter but does not have trigger ID")
+		log.Warningf("Build passes filter but does not have trigger ID: %v, status: %v", bq.filter, build.GetStatus())
 	}
 	log.Infof("sending Big Query write for build %q (status: %q)", build.Id, build.Status)
 	return nil
