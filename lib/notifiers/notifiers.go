@@ -54,7 +54,8 @@ var (
 
 // Flags.
 var (
-	smoketestFlag = flag.Bool("smoketest", false, "If true, Main will simply log the notifier type and exit.")
+	smoketest  = flag.Bool("smoketest", false, "If true, Main will simply log the notifier type and exit.")
+	setupCheck = flag.Bool("setup_check", false, "If true, the configuration YAML is read from stdin and notifier.SetUp is called in a faked-out way. The smoketest flag takes priority over this one.")
 )
 
 // Config is the common type for (YAML-based) configuration files for notifications.
@@ -146,16 +147,38 @@ func (c *CELPredicate) Apply(_ context.Context, build *cbpb.Build) bool {
 
 // Main is a function that can be called by `main()` functions in notifier binaries.
 func Main(notifier Notifier) error {
+	// TODO(ljr): Refactor/separate this flagged logic from the main logic via a Main/doMain refactor.
+	ctx := context.Background()
+
 	if !flag.Parsed() {
 		flag.Parse()
 	}
 
-	if *smoketestFlag {
+	if *smoketest {
 		log.V(0).Infof("notifier smoketest: %T", notifier)
 		return nil
 	}
 
-	ctx := context.Background()
+	if *setupCheck {
+		log.V(2).Info("starting setup check")
+		cfg, err := decodeConfig(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("failed to decode YAML config from stdin: %v", err)
+		}
+
+		if out, err := yaml.Marshal(cfg); err != nil {
+			log.Warningf("failed to re-encode config YAML: %v", err)
+		} else {
+			log.V(2).Infof("got re-encoded YAML from stdin:\n%s", string(out))
+		}
+
+		if err := notifier.SetUp(ctx, cfg, new(setupCheckSecretGetter)); err != nil {
+			return fmt.Errorf("failed to run notifier.SetUp during setup check: %s", err)
+		}
+
+		log.V(2).Infof("setup check successful")
+		return nil
+	}
 
 	cfgPath, ok := GetEnv("CONFIG_PATH")
 	if !ok {
@@ -239,6 +262,13 @@ func (a *actualSecretManager) GetSecret(ctx context.Context, name string) (strin
 	return string(res.GetPayload().GetData()), nil
 }
 
+// setupCheckSecretGetter is a faked-out SecretGetter that is only used by the setup check functionality in Main.
+type setupCheckSecretGetter struct{}
+
+func (c *setupCheckSecretGetter) GetSecret(_ context.Context, name string) (string, error) {
+	return fmt.Sprintf("[SECRET VALUE FOR %q]", name), nil
+}
+
 // getGCSConfig fetches the YAML Config file from the given GCS path and returns the parsed Config.
 func getGCSConfig(ctx context.Context, grf gcsReaderFactory, path string) (*Config, error) {
 	if trm := strings.TrimPrefix(path, "gs://"); trm != path {
@@ -261,14 +291,19 @@ func getGCSConfig(ctx context.Context, grf gcsReaderFactory, path string) (*Conf
 	}
 	defer r.Close()
 
-	cfg := new(Config)
-	dcd := yaml.NewDecoder(r)
-	dcd.SetStrict(true)
-	if err := dcd.Decode(cfg); err != nil {
+	cfg, err := decodeConfig(r)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse configuration from YAML at %q: %v", path, err)
 	}
 
 	return cfg, nil
+}
+
+func decodeConfig(r io.Reader) (*Config, error) {
+	cfg := new(Config)
+	dcd := yaml.NewDecoder(r)
+	dcd.SetStrict(true)
+	return cfg, dcd.Decode(cfg)
 }
 
 // validateConfig checks the following (or errors):

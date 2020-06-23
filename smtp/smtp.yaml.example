@@ -25,10 +25,10 @@ spec:
       sender: example-sender@gmail.com
       from: example-from@gmail.com
       recipients:
-        - example-devs@gmail.com
-        - example-cto@gmail.com
+      - example-devs@gmail.com
+      - example-cto@gmail.com
       password:
         secretRef: smtp-password
   secrets:
-    - name: smtp-password
-      value: projects/example-project/secrets/example-smtp-notifier-password/versions/latest
+  - name: smtp-password
+    value: projects/example-project/secrets/example-smtp-notifier-password/versions/latest
