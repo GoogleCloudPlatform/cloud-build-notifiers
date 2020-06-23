@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -45,10 +46,10 @@ type bqRow struct {
 	Status         string
 }
 
-func (bq *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg notifiers.SecretGetter) error {
+func (bq *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ notifiers.SecretGetter) error {
 	projectID := os.Getenv("PROJECT_ID")
 	if projectID == "" {
-		return fmt.Errorf("PROJECT_ID environment variable must be set")
+		return errors.New("PROJECT_ID environment variable must be set")
 	}
 
 	prd, err := notifiers.MakeCELPredicate(cfg.Spec.Notification.Filter)
@@ -60,12 +61,10 @@ func (bq *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg notif
 		return fmt.Errorf("Expected table string: %v", cfg.Spec.Notification.Delivery)
 	}
 
-
-
 	bq.filter = prd
 	bq.client, err = bigquery.NewClient(ctx, projectID)
 	if err != nil {
-		return fmt.Errorf("Failed to initialize bigquery client")
+		return fmt.Errorf("Failed to initialize bigquery client: %v", err)
 	}
 
 	return nil
@@ -77,7 +76,9 @@ func (bq *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) e
 		log.V(2).Infof("Not doing BQ write for build %v", build.Id)
 		return nil
 	}
+	if build.BuildTriggerId == "" {
+		log.Warningf("Build passes filter but does not have trigger ID")
+	}
 	log.Infof("sending Big Query write for build %q (status: %q)", build.Id, build.Status)
-	fmt.Println(build)
 	return nil
 }
