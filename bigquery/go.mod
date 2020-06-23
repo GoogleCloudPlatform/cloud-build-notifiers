@@ -1,4 +1,4 @@
-module github.com/GoogleCloudPlatform/cloud-build-notifiers/smtp
+module github.com/GoogleCloudPlatform/cloud-build-notifiers/bigquery
 
 go 1.14
 

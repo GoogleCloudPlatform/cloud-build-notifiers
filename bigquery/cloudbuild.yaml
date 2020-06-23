@@ -15,6 +15,7 @@
 steps:
 # Build the binary and put it into the builder image.
 - name: gcr.io/cloud-builders/docker
+  id: build-bigquery-notifier
   args:
     - build
     - -t

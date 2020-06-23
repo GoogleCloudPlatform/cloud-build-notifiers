@@ -59,8 +59,6 @@ main () {
   *) fail "${HELP}"
   esac
 
-  echo "${SOURCE_CONFIG_PATH}"
-
   if [ ! -d "${NOTIFIER_TYPE}" ]; then
     fail "expected to run from the root of the cloud-build-notifiers repo"
   fi

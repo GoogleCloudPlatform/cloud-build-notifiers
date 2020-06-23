@@ -18,12 +18,10 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
-
-	log "github.com/golang/glog"
 
 	"cloud.google.com/go/bigquery"
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
+	log "github.com/golang/glog"
 	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 )
 
@@ -50,50 +48,33 @@ type bqRow struct {
 func (bq *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg notifiers.SecretGetter) error {
 	projectID := os.Getenv("PROJECT_ID")
 	if projectID == "" {
-		fmt.Println("PROJECT_ID environment variable must be set.")
-		os.Exit(1)
+		return fmt.Errorf("PROJECT_ID environment variable must be set")
 	}
 
 	prd, err := notifiers.MakeCELPredicate(cfg.Spec.Notification.Filter)
 	if err != nil {
 		return fmt.Errorf("failed to make a CEL predicate: %v", err)
 	}
-	tableString, ok := cfg.Spec.Notification.Delivery["table"].(string)
+	_, ok := cfg.Spec.Notification.Delivery["table"].(string)
 	if !ok {
-		return fmt.Errorf("Expected table string")
+		return fmt.Errorf("Expected table string: %v", cfg.Spec.Notification.Delivery)
 	}
 
-	parsed := strings.Split(tableString, "/")
-	dataset := parsed[len(parsed)-3]
-	table := parsed[len(parsed)-1]
+
 
 	bq.filter = prd
 	bq.client, err = bigquery.NewClient(ctx, projectID)
 	if err != nil {
-		return fmt.Errorf("failed to initialize bigquery client")
+		return fmt.Errorf("Failed to initialize bigquery client")
 	}
-	bq.dataset = bq.client.Dataset(dataset)
-	bq.table = bq.dataset.Table(table)
-	// table existence check
-	_, err = bq.table.Metadata(ctx)
-	if err != nil {
-		schema, err := bigquery.InferSchema(bqRow{})
-		if err != nil {
-			// failed to infer schema
-			fmt.Println("Failed to infer schema")
-		}
-		tableMD := bigquery.TableMetadata{Name: table, Schema: schema}
-		// create table
-		if err := bq.table.Create(ctx, &tableMD); err != nil {
-			return fmt.Errorf("Failed to initialize table %v: %v", table, err)
-		}
-	}
+
 	return nil
 
 }
 
 func (bq *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) error {
 	if !bq.filter.Apply(ctx, build) {
+		log.V(2).Infof("Not doing BQ write for build %v", build.Id)
 		return nil
 	}
 	log.Infof("sending Big Query write for build %q (status: %q)", build.Id, build.Status)
