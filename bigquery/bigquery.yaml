@@ -1,0 +1,10 @@
+apiVersion: cloud-build-notifiers/v1alpha1
+kind: BigQueryNotifier
+metadata:
+  name: example-bigquery-notifier
+spec:
+  notification:
+    filter: build.build_trigger_id == "123e4567-e89b-12d3-a456-426614174000" 
+    delivery:
+      table: projects/aricz-notifers-demo/datasets/notifers_dataset/tables/trigger_table
+

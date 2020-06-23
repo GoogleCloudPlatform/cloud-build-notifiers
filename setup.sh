@@ -55,7 +55,7 @@ main () {
   # Check that the user is using a supported notifier type in the correct
   # directory.
   case "${NOTIFIER_TYPE}" in
-  http|smtp|slack) ;;
+  http|smtp|slack|bigquery) ;;
   *) fail "${HELP}"
   esac
 
@@ -146,7 +146,7 @@ deploy_notifier () {
   gcloud run deploy "${SERVICE_NAME}" \
     --image="${IMAGE_PATH}" \
     --no-allow-unauthenticated \
-    --update-env-vars="CONFIG_PATH=${DESTINATION_CONFIG_PATH}" \
+    --update-env-vars="CONFIG_PATH=${DESTINATION_CONFIG_PATH}, PROJECT_ID=${PROJECT_ID}" \
     || fail "failed to deploy notifier service -- check service logs"
 }
 
