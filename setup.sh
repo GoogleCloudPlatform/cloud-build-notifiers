@@ -146,7 +146,7 @@ deploy_notifier () {
   gcloud run deploy "${SERVICE_NAME}" \
     --image="${IMAGE_PATH}" \
     --no-allow-unauthenticated \
-    --update-env-vars="CONFIG_PATH=${DESTINATION_CONFIG_PATH}","PROJECT_ID=${PROJECT_ID}" \
+    --update-env-vars="CONFIG_PATH=${DESTINATION_CONFIG_PATH}, PROJECT_ID=${PROJECT_ID}" \
     || fail "failed to deploy notifier service -- check service logs"
 }
 
