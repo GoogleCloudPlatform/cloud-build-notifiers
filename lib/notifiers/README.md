@@ -28,3 +28,4 @@ example, you can write a filter like
 `build.status == Build.Status.SUCCESS || "special" in build.tags`
 to only notify on events that are successful or have the `"special"`
 build tag.
+testing a trigger
