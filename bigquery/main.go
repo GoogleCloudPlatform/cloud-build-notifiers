@@ -18,9 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
+	"regexp"
 
 	"cloud.google.com/go/bigquery"
+	"cloud.google.com/go/civil"
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
 	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
@@ -40,10 +43,26 @@ type bqNotifier struct {
 }
 
 type bqRow struct {
-	ProjectID      string
-	ID             string
-	BuildTriggerID string
-	Status         string
+	ProjectID       string
+	ID              string
+	BuildTriggerID  string
+	Status          string
+	ContainerSizeMB *big.Rat
+	Steps           []buildStep
+	CreateTime      civil.Time
+	StartTime       civil.Time
+	FinishTime      civil.Time
+	Tags            []string
+	Env             []string
+}
+
+type buildStep struct {
+	Name      string
+	ID        string
+	Status    string
+	Args      []string
+	StartTime civil.Time
+	EndTime   civil.Time
 }
 
 func (bq *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ notifiers.SecretGetter) error {
@@ -56,15 +75,45 @@ func (bq *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ notifi
 	if err != nil {
 		return fmt.Errorf("failed to make a CEL predicate: %v", err)
 	}
-	_, ok := cfg.Spec.Notification.Delivery["table"].(string)
+	parsed, ok := cfg.Spec.Notification.Delivery["table"].(string)
 	if !ok {
 		return fmt.Errorf("Expected table string: %v", cfg.Spec.Notification.Delivery)
 	}
 
+	// Initialize client
 	bq.filter = prd
 	bq.client, err = bigquery.NewClient(ctx, projectID)
 	if err != nil {
 		return fmt.Errorf("Failed to initialize bigquery client: %v", err)
+	}
+
+	// Extract dataset id and table id from config
+	rgp, _ := regexp.Compile(".*/.*/.*/(.*)/.*/(.*)")
+	rs := rgp.FindStringSubmatch(parsed)
+	bq.dataset = bq.client.Dataset(rs[1])
+	bq.table = bq.dataset.Table(rs[2])
+
+	// Check for existence of dataset, create if false
+	_, err = bq.dataset.Metadata(ctx)
+	if err != nil {
+		log.Infof("Error obtaining dataset metadata: %v", bq.dataset)
+		if err := bq.dataset.Create(ctx, &bigquery.DatasetMetadata{}); err != nil {
+			return fmt.Errorf("Error creating dataset: %v", err)
+		}
+	}
+
+	// Check for existence of table, create if false
+	_, err = bq.table.Metadata(ctx)
+	if err != nil {
+		log.Infof("Error obtaining metadata: %v", err)
+		schema, err := bigquery.InferSchema(bqRow{})
+		if err != nil {
+			return fmt.Errorf("Failed to infer schema: %v", err)
+		}
+		// Create table if it does not exist.
+		if err := bq.table.Create(ctx, &bigquery.TableMetadata{Schema: schema}); err != nil {
+			return fmt.Errorf("Failed to initialize table %v: ", err)
+		}
 	}
 
 	return nil
