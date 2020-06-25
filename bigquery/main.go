@@ -29,6 +29,8 @@ import (
 	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 )
 
+var rgp = regexp.MustCompile(".*/.*/.*/(.*)/.*/(.*)")
+
 func main() {
 	if err := notifiers.Main(new(bqNotifier)); err != nil {
 		log.Fatalf("fatal error: %v", err)
@@ -88,7 +90,6 @@ func (bq *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ notifi
 	}
 
 	// Extract dataset id and table id from config
-	rgp, _ := regexp.Compile(".*/.*/.*/(.*)/.*/(.*)")
 	rs := rgp.FindStringSubmatch(parsed)
 	bq.dataset = bq.client.Dataset(rs[1])
 	bq.table = bq.dataset.Table(rs[2])
@@ -96,8 +97,8 @@ func (bq *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ notifi
 	// Check for existence of dataset, create if false
 	_, err = bq.dataset.Metadata(ctx)
 	if err != nil {
-		log.Infof("Error obtaining dataset metadata: %v", bq.dataset)
-		if err := bq.dataset.Create(ctx, &bigquery.DatasetMetadata{}); err != nil {
+		log.Warningf("Error obtaining dataset metadata: %v", err)
+		if err := bq.dataset.Create(ctx, &bigquery.DatasetMetadata{Name: rs[1], Description: "BigQuery Notifier Build Data"}); err != nil {
 			return fmt.Errorf("Error creating dataset: %v", err)
 		}
 	}
@@ -105,13 +106,13 @@ func (bq *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ notifi
 	// Check for existence of table, create if false
 	_, err = bq.table.Metadata(ctx)
 	if err != nil {
-		log.Infof("Error obtaining metadata: %v", err)
+		log.Warningf("Error obtaining table metadata: %v", err)
 		schema, err := bigquery.InferSchema(bqRow{})
 		if err != nil {
 			return fmt.Errorf("Failed to infer schema: %v", err)
 		}
 		// Create table if it does not exist.
-		if err := bq.table.Create(ctx, &bigquery.TableMetadata{Schema: schema}); err != nil {
+		if err := bq.table.Create(ctx, &bigquery.TableMetadata{Name: rs[2], Description: "BigQuery Notifier Build Data Table", Schema: schema}); err != nil {
 			return fmt.Errorf("Failed to initialize table %v: ", err)
 		}
 	}
