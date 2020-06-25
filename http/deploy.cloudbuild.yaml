@@ -15,24 +15,28 @@
 steps:
 # Build the binary and put it into the builder image.
 - name: gcr.io/cloud-builders/docker
-  id: build-http-notifier
   args:
   - build
   - -t
-  - gcr.io/gcb-release/notifiers/http:$TAG_NAME
+  - gcr.io/$_REGISTRY_PROJECT/notifiers/http:$TAG_NAME
+  - -t
+  - gcr.io/$_REGISTRY_PROJECT/notifiers/http:latest
   - --file=./http/Dockerfile
   - '.'
 # Run the smoketest to verify that everything built correctly.
-- name: gcr.io/gcb-release/notifiers/http:$TAG_NAME
-  id: smoketest-http-notifier
+- name: gcr.io/$_REGISTRY_PROJECT/notifiers/http:$TAG_NAME
   args:
   - --smoketest
   - --alsologtostderr
 
 # Push the image.
 images:
-- gcr.io/gcb-release/notifiers/http:$TAG_NAME
+- gcr.io/$_REGISTRY_PROJECT/notifiers/http:$TAG_NAME
+- gcr.io/$_REGISTRY_PROJECT/notifiers/http:latest
+
+substitutions:
+  _REGISTRY_PROJECT: gcb-release
 
 tags:
 - cloud-build-notifiers-http
-- http:$TAG_NAME
+- http-$TAG_NAME

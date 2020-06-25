@@ -14,7 +14,6 @@
 
 steps:
 - name: gcr.io/cloud-builders/docker
-  id: build-http-notifier
   args:
   - build
   - --file=./http/Dockerfile

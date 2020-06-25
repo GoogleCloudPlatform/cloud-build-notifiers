@@ -15,24 +15,28 @@
 steps:
 # Build the binary and put it into the builder image.
 - name: gcr.io/cloud-builders/docker
-  id: build-smtp-notifier
   args:
   - build
   - -t
-  - gcr.io/gcb-release/notifiers/smtp:$TAG_NAME
+  - gcr.io/$_REGISTRY_PROJECT/notifiers/smtp:$TAG_NAME
+  - -t
+  - gcr.io/$_REGISTRY_PROJECT/notifiers/smtp:latest
   - --file=./smtp/Dockerfile
   - '.'
 # Run the smoketest to verify that everything built correctly.
-- name: gcr.io/gcb-release/notifiers/smtp:$TAG_NAME
-  id: smoketest-smtp-notifier
+- name: gcr.io/$_REGISTRY_PROJECT/notifiers/smtp:$TAG_NAME
   args:
   - --smoketest
   - --alsologtostderr
 
 # Push the image.
 images:
-- gcr.io/gcb-release/notifiers/smtp:$TAG_NAME
+- gcr.io/$_REGISTRY_PROJECT/notifiers/smtp:$TAG_NAME
+- gcr.io/$_REGISTRY_PROJECT/notifiers/smtp:latest
+
+substitutions:
+  _REGISTRY_PROJECT: gcb-release
 
 tags:
 - cloud-build-notifiers-smtp
-- smtp:$TAG_NAME
+- smtp-$TAG_NAME
