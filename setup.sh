@@ -1,6 +1,6 @@
 #!/bin/sh
 # Copyright 2020 Google LLC
-# Author: lru@google.com (Leo Rudberg)
+# Author: ljr@google.com (Leo Rudberg)
 
 set -u
 
