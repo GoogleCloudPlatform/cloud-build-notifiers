@@ -26,6 +26,10 @@ build tag.
 testing a trigger
 testing more triggers
 <<<<<<< HEAD
+<<<<<<< HEAD
 testing notrust triggers
 =======
 >>>>>>> 56daa9a... another one
+=======
+testing notrust triggers
+>>>>>>> 6d51f33... and another one
