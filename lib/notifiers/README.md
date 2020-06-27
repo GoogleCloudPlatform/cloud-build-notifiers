@@ -25,3 +25,4 @@ to only notify on events that are successful or have the `"special"`
 build tag.
 testing a trigger
 testing more triggers
+testing notrust triggers
