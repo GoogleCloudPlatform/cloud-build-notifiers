@@ -17,25 +17,23 @@ steps:
 - name: gcr.io/cloud-builders/docker
   args:
   - build
-  - -t
-  - gcr.io/$_REGISTRY_PROJECT/notifiers/smtp:$TAG_NAME
-  - -t
-  - gcr.io/$_REGISTRY_PROJECT/notifiers/smtp:latest
+  - --tag=$_REGISTRY/smtp:$TAG_NAME
+  - --tag=$_REGISTRY/smtp:latest
   - --file=./smtp/Dockerfile
   - '.'
 # Run the smoketest to verify that everything built correctly.
-- name: gcr.io/$_REGISTRY_PROJECT/notifiers/smtp:$TAG_NAME
+- name: $_REGISTRY/smtp:$TAG_NAME
   args:
   - --smoketest
   - --alsologtostderr
 
-# Push the image.
+# Push the image with tags.
 images:
-- gcr.io/$_REGISTRY_PROJECT/notifiers/smtp:$TAG_NAME
-- gcr.io/$_REGISTRY_PROJECT/notifiers/smtp:latest
+- $_REGISTRY/smtp:$TAG_NAME
+- $_REGISTRY/smtp:latest
 
 substitutions:
-  _REGISTRY_PROJECT: gcb-release
+  _REGISTRY: us-east1-docker.pkg.dev/gcb-release/cloud-build-notifiers
 
 tags:
 - cloud-build-notifiers-smtp
