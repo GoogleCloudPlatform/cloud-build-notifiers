@@ -7,20 +7,23 @@ set -u
 HELP="
 Cloud Build Notifiers setup script.
 
-This script runs almost all of the setup required for configuring, building,
+This script runs almost all of the setup required for configuring
 and deploying a notifier on GCP. It is based on the guide here:
 https://cloud.google.com/cloud-build/docs/configure-notifications
-Setting up any secret_name must be done outside
+Setting up any 'secret_name' must be done outside
 this script. This script is assumed to be run in the root of your
-cloud-build-notifiers clone/fork.
+cloud-build-notifiers clone/fork. Currently, this script only deploys
+the 'latest' version of the notifier to Cloud Run. To check that your notifier
+configuration YAML can work with that version, run the notifier locally with
+the '--setup_check' flag that is mentioned in the repo root README.md. 
 
 The currently supported notifier types (which correspond to the directories in
 the repo) are:
 
+* bigquery (under development)
 * http
 * slack
 * smtp
-* bigquery
 
 Usage [in the cloud-build-notifiers repo root]:
 
@@ -86,7 +89,7 @@ main () {
   DESTINATION_BUCKET_NAME="${PROJECT_ID}-notifiers-config"
   DESTINATION_BUCKET_URI="gs://${DESTINATION_BUCKET_NAME}"
   DESTINATION_CONFIG_PATH="${DESTINATION_BUCKET_URI}/${SOURCE_CONFIG_BASENAME}"
-  IMAGE_PATH="gcr.io/${PROJECT_ID}/notifiers/${NOTIFIER_TYPE}"
+  IMAGE_PATH="us-east1-docker.pkg.dev/gcb-release/cloud-build-notifiers/${NOTIFIER_TYPE}:latest"
   SERVICE_NAME="${NOTIFIER_TYPE}-notifier"
   SUBSCRIPTION_NAME="${NOTIFIER_TYPE}-subscription"
   INVOKER_SA="cloud-run-pubsub-invoker@${PROJECT_ID}.iam.gserviceaccount.com"
@@ -101,7 +104,6 @@ main () {
   fi
 
   upload_config
-  build_notifier
   deploy_notifier
   SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" \
     --format="value(status.url)")
@@ -136,19 +138,12 @@ upload_config () {
     || fail "failed to copy config to GCS"
 }
 
-build_notifier () {
-  gcloud builds submit . \
-    --config="${NOTIFIER_TYPE}/cloudbuild.yaml" \
-    --substitutions="_IMAGE_PATH=${IMAGE_PATH}" \
-    || fail "failed to build notifier on GCB"
-}
-
 deploy_notifier () {
   gcloud run deploy "${SERVICE_NAME}" \
     --image="${IMAGE_PATH}" \
     --no-allow-unauthenticated \
-    --update-env-vars="CONFIG_PATH=${DESTINATION_CONFIG_PATH}, PROJECT_ID=${PROJECT_ID}" \
-    || fail "failed to deploy notifier service -- check service logs"
+    --update-env-vars="CONFIG_PATH=${DESTINATION_CONFIG_PATH},PROJECT_ID=${PROJECT_ID}" \
+    || fail "failed to deploy notifier service -- check service logs for configuration error"
 }
 
 add_sa_token_creator_permission () {
