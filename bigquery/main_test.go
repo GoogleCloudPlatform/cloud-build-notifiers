@@ -27,6 +27,22 @@ type mockBQ struct {
 type mockBQFactory struct {
 }
 
+func (bqf *mockBQFactory) Make(ctx context.Context) (bq, error) {
+	return &mockBQ{}, nil
+}
+
+func (bq *mockBQ) EnsureDataset(ctx context.Context, datasetName string) error {
+	return nil
+}
+
+func (bq *mockBQ) EnsureTable(ctx context.Context, tableName string) error {
+	return nil
+}
+
+func (bq *mockBQ) WriteRow(ctx context.Context, row *bqRow) error {
+	return nil
+}
+
 func TestSetUp(t *testing.T) {
 	const tableURI = "projects/project_name/datasets/dataset_name/tables/table_name"
 
@@ -128,20 +144,4 @@ func TestSetUp(t *testing.T) {
 
 		})
 	}
-}
-
-func (bqf *mockBQFactory) Make(ctx context.Context) (bq, error) {
-	return &mockBQ{}, nil
-}
-
-func (bq *mockBQ) EnsureDataset(ctx context.Context, datasetName string) error {
-	return nil
-}
-
-func (bq *mockBQ) EnsureTable(ctx context.Context, tableName string) error {
-	return nil
-}
-
-func (bq *mockBQ) WriteRow(ctx context.Context, row *bqRow) error {
-	return nil
 }

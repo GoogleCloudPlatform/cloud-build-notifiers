@@ -32,7 +32,6 @@ import (
 var tableResource = regexp.MustCompile(".*/.*/.*/(.*)/.*/(.*)")
 
 func main() {
-
 	if err := notifiers.Main(&bqNotifier{bqf: &actualBQFactory{}}); err != nil {
 		log.Fatalf("fatal error: %v", err)
 	}
@@ -116,12 +115,10 @@ func (n *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ notifie
 	if len(rs) != 3 {
 		return fmt.Errorf("Failed to parse valid table URI: %v", parsed)
 	}
-	err = n.client.EnsureDataset(ctx, rs[1])
-	if err != nil {
+	if err = n.client.EnsureDataset(ctx, rs[1]); err != nil {
 		return err
 	}
-	err = n.client.EnsureTable(ctx, rs[2])
-	if err != nil {
+	if err = n.client.EnsureTable(ctx, rs[2]); err != nil {
 		return err
 	}
 	return nil
