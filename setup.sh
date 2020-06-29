@@ -20,6 +20,7 @@ the repo) are:
 * http
 * slack
 * smtp
+* bigquery
 
 Usage [in the cloud-build-notifiers repo root]:
 
