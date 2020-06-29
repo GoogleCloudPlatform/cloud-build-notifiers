@@ -17,24 +17,24 @@ steps:
 - name: gcr.io/cloud-builders/docker
   args:
   - build
-  - --tag=$_REGISTRY/http:$TAG_NAME
-  - --tag=$_REGISTRY/http:latest
+  - --tag=${_REGISTRY}/http:${TAG_NAME}
+  - --tag=${_REGISTRY}/http:latest
   - --file=./http/Dockerfile
   - '.'
 # Run the smoketest to verify that everything built correctly.
-- name: $_REGISTRY/http:$TAG_NAME
+- name: ${_REGISTRY}/http:${TAG_NAME}
   args:
   - --smoketest
   - --alsologtostderr
 
 # Push the image with tags.
 images:
-- $_REGISTRY/http:$TAG_NAME
-- $_REGISTRY/http:latest
+- ${_REGISTRY}/http:${TAG_NAME}
+- ${_REGISTRY}/http:latest
 
 substitutions:
   _REGISTRY: us-east1-docker.pkg.dev/gcb-release/cloud-build-notifiers
 
 tags:
 - cloud-build-notifiers-http
-- http-$TAG_NAME
+- http-${TAG_NAME}
