@@ -3,11 +3,6 @@
 This `notifiers` Go package exposes a lightweight, zero-magic, _optional_
 framework for writing new notifiers and extensions.
 
-> This is an Alpha release of Cloud Build Notifiers.
-> This codebase might be changed in ways that are not backwards-compatible.
-> We do not recommend using this codebase for production applications.
-> Furthermore, this release is not subject to any SLA or deprecation policy.
-
 To write your own notifier using this package, all you need to do is write
 something that implements the `notifiers.Notifier` interface and then pass that
 to `notifiers.Main` in your Go executable's `main` method (or wherever). That

@@ -49,7 +49,9 @@ const (
 
 var (
 	// Set of allowed notifier Config `apiVersions`.
-	allowedYAMLAPIVersions = map[string]bool{"cloud-build-notifiers/v1alpha1": true}
+	allowedYAMLAPIVersions = map[string]bool{
+		"cloud-build-notifiers/v1": true,
+	}
 )
 
 // Flags.
@@ -170,6 +172,10 @@ func Main(notifier Notifier) error {
 			log.Warningf("failed to re-encode config YAML: %v", err)
 		} else {
 			log.V(2).Infof("got re-encoded YAML from stdin:\n%s", string(out))
+		}
+
+		if err := validateConfig(cfg); err != nil {
+			return fmt.Errorf("failed to validate config during setup check: %v", err)
 		}
 
 		if err := notifier.SetUp(ctx, cfg, new(setupCheckSecretGetter)); err != nil {
