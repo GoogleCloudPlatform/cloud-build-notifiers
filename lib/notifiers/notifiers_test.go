@@ -161,7 +161,7 @@ func (f *fakeGCSReaderFactory) NewReader(_ context.Context, bucket, object strin
 }
 
 const validConfigYAML = `
-apiVersion: github.com/GoogleCloudPlatform/cloud-build-notifiers/v1
+apiVersion: cloud-build-notifiers/v1
 kind: TestNotifier
 metadata:
   name: my-test-notifier
@@ -179,7 +179,7 @@ spec:
 `
 
 var validConfig = &Config{
-	APIVersion: "github.com/GoogleCloudPlatform/cloud-build-notifiers/v1",
+	APIVersion: "cloud-build-notifiers/v1",
 	Kind:       "TestNotifier",
 	Metadata: &Metadata{
 		Name: "my-test-notifier",

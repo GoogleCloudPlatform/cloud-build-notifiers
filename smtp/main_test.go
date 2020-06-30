@@ -104,7 +104,7 @@ func TestGetMailConfig(t *testing.T) {
 
 func TestCorrectYAMLParseToMailConfig(t *testing.T) {
 	const yamlConfig = `
-apiVersion: github.com/GoogleCloudPlatform/cloud-build-notifiers/v1
+apiVersion: cloud-build-notifiers/v1
 kind: SMTPNotifier
 metadata:
   name: failed-build-email-notification

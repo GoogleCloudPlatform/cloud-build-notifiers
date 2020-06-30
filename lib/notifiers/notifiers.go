@@ -50,7 +50,7 @@ const (
 var (
 	// Set of allowed notifier Config `apiVersions`.
 	allowedYAMLAPIVersions = map[string]bool{
-		"github.com/GoogleCloudPlatform/cloud-build-notifiers/v1": true,
+		"cloud-build-notifiers/v1": true,
 	}
 )
 
