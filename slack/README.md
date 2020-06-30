@@ -8,7 +8,7 @@ events that Cloud Build publishes via its
 [Pub/Sub topic](https://cloud.google.com/cloud-build/docs/send-build-notifications).
 
 For detailed instructions on setting up this notifier,
-see [Configuring Slack notifications](https://cloud.google.com/cloud-build/docs/configure-notifications#configuring_slack_notifications).
+see [Configuring Slack Notifications](https://cloud.google.com/cloud-build/docs/configuring-notifications/configure-slack).
 
 ## Configuration Variables
 
