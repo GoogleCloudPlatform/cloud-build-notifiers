@@ -18,6 +18,7 @@ steps:
   args:
   - build
   - --tag=${_REGISTRY}/http:${TAG_NAME}
+  - --tag=${_REGISTRY}/http:${_MAJOR_LATEST}
   - --tag=${_REGISTRY}/http:latest
   - --file=./http/Dockerfile
   - '.'
@@ -30,10 +31,16 @@ steps:
 # Push the image with tags.
 images:
 - ${_REGISTRY}/http:${TAG_NAME}
+- ${_REGISTRY}/http:${_MAJOR_LATEST}
 - ${_REGISTRY}/http:latest
+
+options:
+  dynamic_substitutions: true
 
 substitutions:
   _REGISTRY: us-east1-docker.pkg.dev/gcb-release/cloud-build-notifiers
+  # Looks like: $NOTIF-$MAJOR-latest. Not meant for overriding.
+  _MAJOR_LATEST: "${TAG_NAME%%.*}-latest"
 
 tags:
 - cloud-build-notifiers-http
