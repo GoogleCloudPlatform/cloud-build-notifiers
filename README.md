@@ -27,9 +27,9 @@ There are currently 3 supported notifier types:
 
 **See the official documentation on Google Cloud for how to configure each notifier:**
 
-- [Configuring SMTP Notifications](https://cloud.google.com/cloud-build/docs/configuring-notifications/configure-smtp)
-- [Configuring HTTP Notifications](https://cloud.google.com/cloud-build/docs/configuring-notifications/configure-http)
-- [Configuring Slack Notifications](https://cloud.google.com/cloud-build/docs/configuring-notifications/configure-slack)
+- [Configuring SMTP notifications](https://cloud.google.com/cloud-build/docs/configuring-notifications/configure-smtp)
+- [Configuring HTTP notifications](https://cloud.google.com/cloud-build/docs/configuring-notifications/configure-http)
+- [Configuring Slack notifications](https://cloud.google.com/cloud-build/docs/configuring-notifications/configure-slack)
 
 
 ## Setup Script
