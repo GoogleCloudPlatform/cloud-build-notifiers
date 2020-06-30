@@ -54,7 +54,7 @@ func (bq *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ notifi
 
 	prd, err := notifiers.MakeCELPredicate(cfg.Spec.Notification.Filter)
 	if err != nil {
-		return fmt.Errorf("failed to make a CEL predicate: %v", err)
+		return fmt.Errorf("failed to make a CEL predicate: %w", err)
 	}
 	_, ok := cfg.Spec.Notification.Delivery["table"].(string)
 	if !ok {
@@ -64,7 +64,7 @@ func (bq *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ notifi
 	bq.filter = prd
 	bq.client, err = bigquery.NewClient(ctx, projectID)
 	if err != nil {
-		return fmt.Errorf("Failed to initialize bigquery client: %v", err)
+		return fmt.Errorf("Failed to initialize bigquery client: %w", err)
 	}
 
 	return nil

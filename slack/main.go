@@ -43,21 +43,21 @@ type slackNotifier struct {
 func (s *slackNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg notifiers.SecretGetter) error {
 	prd, err := notifiers.MakeCELPredicate(cfg.Spec.Notification.Filter)
 	if err != nil {
-		return fmt.Errorf("failed to make a CEL predicate: %v", err)
+		return fmt.Errorf("failed to make a CEL predicate: %w", err)
 	}
 	s.filter = prd
 
 	wuRef, err := notifiers.GetSecretRef(cfg.Spec.Notification.Delivery, webhookURLSecretName)
 	if err != nil {
-		return fmt.Errorf("failed to get Secret ref from delivery config (%v) field %q: %v", cfg.Spec.Notification.Delivery, webhookURLSecretName, err)
+		return fmt.Errorf("failed to get Secret ref from delivery config (%v) field %q: %w", cfg.Spec.Notification.Delivery, webhookURLSecretName, err)
 	}
 	wuResource, err := notifiers.FindSecretResourceName(cfg.Spec.Secrets, wuRef)
 	if err != nil {
-		return fmt.Errorf("failed to find Secret for ref %q: %v", wuRef, err)
+		return fmt.Errorf("failed to find Secret for ref %q: %w", wuRef, err)
 	}
 	wu, err := sg.GetSecret(ctx, wuResource)
 	if err != nil {
-		return fmt.Errorf("failed to get token secret: %v", err)
+		return fmt.Errorf("failed to get token secret: %w", err)
 	}
 	s.webhookURL = wu
 
@@ -72,7 +72,7 @@ func (s *slackNotifier) SendNotification(ctx context.Context, build *cbpb.Build)
 	log.Infof("sending Slack webhook for Build %q (status: %q)", build.Id, build.Status)
 	msg, err := s.writeMessage(build)
 	if err != nil {
-		return fmt.Errorf("failed to write Slack message: %v", err)
+		return fmt.Errorf("failed to write Slack message: %w", err)
 	}
 
 	return slack.PostWebhook(s.webhookURL, msg)
@@ -98,7 +98,7 @@ func (s *slackNotifier) writeMessage(build *cbpb.Build) (*slack.WebhookMessage, 
 
 	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.ChatMedium)
 	if err != nil {
-		return nil, fmt.Errorf("failed to add UTM params: %v", err)
+		return nil, fmt.Errorf("failed to add UTM params: %w", err)
 	}
 
 	atch := slack.Attachment{

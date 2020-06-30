@@ -165,7 +165,7 @@ func Main(notifier Notifier) error {
 		log.V(2).Info("starting setup check")
 		cfg, err := decodeConfig(os.Stdin)
 		if err != nil {
-			return fmt.Errorf("failed to decode YAML config from stdin: %v", err)
+			return fmt.Errorf("failed to decode YAML config from stdin: %w", err)
 		}
 
 		if out, err := yaml.Marshal(cfg); err != nil {
@@ -175,11 +175,11 @@ func Main(notifier Notifier) error {
 		}
 
 		if err := validateConfig(cfg); err != nil {
-			return fmt.Errorf("failed to validate config during setup check: %v", err)
+			return fmt.Errorf("failed to validate config during setup check: %w", err)
 		}
 
 		if err := notifier.SetUp(ctx, cfg, new(setupCheckSecretGetter)); err != nil {
-			return fmt.Errorf("failed to run notifier.SetUp during setup check: %s", err)
+			return fmt.Errorf("failed to run notifier.SetUp during setup check: %w", err)
 		}
 
 		log.V(2).Infof("setup check successful")
@@ -193,27 +193,27 @@ func Main(notifier Notifier) error {
 
 	sc, err := storage.NewClient(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create new GCS client: %v", err)
+		return fmt.Errorf("failed to create new GCS client: %w", err)
 	}
 	defer sc.Close()
 
 	smc, err := secretmanager.NewClient(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create new SecretManager client: %v", err)
+		return fmt.Errorf("failed to create new SecretManager client: %w", err)
 	}
 	defer smc.Close()
 
 	cfg, err := getGCSConfig(ctx, &actualGCSReaderFactory{sc}, cfgPath)
 	if err != nil {
-		return fmt.Errorf("failed to get config from GCS: %v", err)
+		return fmt.Errorf("failed to get config from GCS: %w", err)
 	}
 	if err := validateConfig(cfg); err != nil {
-		return fmt.Errorf("got invalid config from path %q: %v", cfgPath, err)
+		return fmt.Errorf("got invalid config from path %q: %w", cfgPath, err)
 	}
 	log.V(2).Infof("got config from GCS (%q): %+v\n", cfgPath, cfg)
 
 	if err := notifier.SetUp(ctx, cfg, &actualSecretManager{smc}); err != nil {
-		return fmt.Errorf("failed to call SetUp on notifier: %v", err)
+		return fmt.Errorf("failed to call SetUp on notifier: %w", err)
 	}
 
 	log.V(2).Infoln("starting HTTP server...")
@@ -262,7 +262,7 @@ func (a *actualSecretManager) GetSecret(ctx context.Context, name string) (strin
 	// See https://github.com/GoogleCloudPlatform/golang-samples/blob/master/secretmanager/access_secret_version.go# for an example usage.
 	res, err := a.client.AccessSecretVersion(ctx, &smpb.AccessSecretVersionRequest{Name: name})
 	if err != nil {
-		return "", fmt.Errorf("failed to get secret named %q: %v", name, err)
+		return "", fmt.Errorf("failed to get secret named %q: %w", name, err)
 	}
 
 	return string(res.GetPayload().GetData()), nil
@@ -293,13 +293,13 @@ func getGCSConfig(ctx context.Context, grf gcsReaderFactory, path string) (*Conf
 	bucket, object := split[0], split[1]
 	r, err := grf.NewReader(ctx, bucket, object)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get reader for (bucket=%q, object=%q): %v", bucket, object, err)
+		return nil, fmt.Errorf("failed to get reader for (bucket=%q, object=%q): %w", bucket, object, err)
 	}
 	defer r.Close()
 
 	cfg, err := decodeConfig(r)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse configuration from YAML at %q: %v", path, err)
+		return nil, fmt.Errorf("failed to parse configuration from YAML at %q: %w", path, err)
 	}
 
 	return cfg, nil
@@ -334,12 +334,12 @@ func MakeCELPredicate(filter string) (*CELPredicate, error) {
 		cel.Container(cloudBuildProtoPkg),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create a CEL env: %v", err)
+		return nil, fmt.Errorf("failed to create a CEL env: %w", err)
 	}
 
 	ast, issues := env.Compile(filter)
 	if issues != nil && issues.Err() != nil {
-		return nil, fmt.Errorf("failed to compile CEL filter %q: %v", filter, issues.Err())
+		return nil, fmt.Errorf("failed to compile CEL filter %q: %w", filter, issues.Err())
 	}
 
 	if !proto.Equal(ast.ResultType(), decls.Bool) {
@@ -348,7 +348,7 @@ func MakeCELPredicate(filter string) (*CELPredicate, error) {
 
 	prg, err := env.Program(ast, cel.EvalOptions(cel.OptOptimize))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create CEL program from filter %q: %v", filter, err)
+		return nil, fmt.Errorf("failed to create CEL program from filter %q: %w", filter, err)
 	}
 
 	return &CELPredicate{prg}, nil
@@ -462,13 +462,13 @@ const (
 func AddUTMParams(logURL string, medium UTMMedium) (string, error) {
 	u, err := url.Parse(logURL)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse URL %q: %v", logURL, err)
+		return "", fmt.Errorf("failed to parse URL %q: %w", logURL, err)
 	}
 
 	// Use ParseQuery to fail if we get malformed params to start with, since it should never happen.
 	vals, err := url.ParseQuery(u.RawQuery)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse query from %q: %v", logURL, err)
+		return "", fmt.Errorf("failed to parse query from %q: %w", logURL, err)
 	}
 
 	var m string
