@@ -7,7 +7,7 @@ events that Cloud Build publishes via its
 [Pub/Sub topic](https://cloud.google.com/cloud-build/docs/send-build-notifications).
 
 For detailed instructions on setting up this notifier,
-see [Configuring email notifications](https://cloud.google.com/cloud-build/docs/configure-notifications#configuring_email_notifications).
+see [Configuring SMTP notifications](https://cloud.google.com/cloud-build/docs/configuring-notifications/configure-smtp).
 
 ## Configuration Variables
 
