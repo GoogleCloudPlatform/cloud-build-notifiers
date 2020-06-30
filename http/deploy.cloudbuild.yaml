@@ -15,27 +15,26 @@
 steps:
 # Build the binary and put it into the builder image.
 - name: gcr.io/cloud-builders/docker
-  id: build-slack-notifier
   args:
-    - build
-    - -t
-    - $_IMAGE_PATH
-    - --file=./slack/Dockerfile
-    - '.'
+  - build
+  - --tag=${_REGISTRY}/http:${TAG_NAME}
+  - --tag=${_REGISTRY}/http:latest
+  - --file=./http/Dockerfile
+  - '.'
 # Run the smoketest to verify that everything built correctly.
-- name: $_IMAGE_PATH
+- name: ${_REGISTRY}/http:${TAG_NAME}
   args:
-    - --smoketest
-    - --alsologtostderr
+  - --smoketest
+  - --alsologtostderr
 
-# Push the image.
+# Push the image with tags.
 images:
-- $_IMAGE_PATH
+- ${_REGISTRY}/http:${TAG_NAME}
+- ${_REGISTRY}/http:latest
 
 substitutions:
-  # The container registry path to use for uploading the newly built image.
-  # For example, this could be 'gcr.io/<your-project-id>/notifiers/slack'.
-  _IMAGE_PATH: <image-path-here>
+  _REGISTRY: us-east1-docker.pkg.dev/gcb-release/cloud-build-notifiers
 
 tags:
-  - cloud-build-notifiers-slack
+- cloud-build-notifiers-http
+- http-${TAG_NAME}

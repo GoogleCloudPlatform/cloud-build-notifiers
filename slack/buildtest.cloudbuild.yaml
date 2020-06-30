@@ -13,29 +13,11 @@
 # limitations under the License.
 
 steps:
-# Build the binary and put it into the builder image.
 - name: gcr.io/cloud-builders/docker
-  id: build-http-notifier
   args:
-    - build
-    - -t
-    - $_IMAGE_PATH
-    - --file=./http/Dockerfile
-    - '.'
-# Run the smoketest to verify that everything built correctly.
-- name: $_IMAGE_PATH
-  args:
-    - --smoketest
-    - --alsologtostderr
-
-# Push the image.
-images:
-- $_IMAGE_PATH
-
-substitutions:
-  # The container registry path to use for uploading the newly built image.
-  # For example, this could be 'gcr.io/<your-project-id>/notifiers/http'.
-  _IMAGE_PATH: <image-path-here>
+  - build
+  - --file=./slack/Dockerfile
+  - '.'
 
 tags:
-  - cloud-build-notifiers-http
+- cloud-build-notifiers-slack
