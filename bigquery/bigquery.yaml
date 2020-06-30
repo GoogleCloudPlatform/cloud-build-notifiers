@@ -1,4 +1,4 @@
-apiVersion: cloud-build-notifiers/v1alpha1
+apiVersion: cloud-build-notifiers/v1
 kind: BigQueryNotifier
 metadata:
   name: example-bigquery-notifier
