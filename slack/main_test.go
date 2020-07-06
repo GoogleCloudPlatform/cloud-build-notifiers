@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/nlopes/slack"
+	"github.com/slack-go/slack"
 	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 )
 
