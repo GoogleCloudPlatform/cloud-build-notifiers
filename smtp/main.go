@@ -53,19 +53,19 @@ type mailConfig struct {
 func (s *smtpNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg notifiers.SecretGetter) error {
 	prd, err := notifiers.MakeCELPredicate(cfg.Spec.Notification.Filter)
 	if err != nil {
-		return fmt.Errorf("failed to create CELPredicate: %v", err)
+		return fmt.Errorf("failed to create CELPredicate: %w", err)
 	}
 	s.filter = prd
 
 	tmpl, err := template.New("email_template").Parse(htmlBody)
 	if err != nil {
-		return fmt.Errorf("failed to parse HTML email template: %v", err)
+		return fmt.Errorf("failed to parse HTML email template: %w", err)
 	}
 	s.tmpl = tmpl
 
 	mcfg, err := getMailConfig(ctx, sg, cfg.Spec)
 	if err != nil {
-		return fmt.Errorf("failed to construct a mail delivery config: %v", err)
+		return fmt.Errorf("failed to construct a mail delivery config: %w", err)
 	}
 	s.mcfg = mcfg
 
@@ -109,17 +109,17 @@ func getMailConfig(ctx context.Context, sg notifiers.SecretGetter, spec *notifie
 
 	passwordRef, err := notifiers.GetSecretRef(delivery, "password")
 	if err != nil {
-		return mailConfig{}, fmt.Errorf("failed to get ref for secret field `password`: %v", err)
+		return mailConfig{}, fmt.Errorf("failed to get ref for secret field `password`: %w", err)
 	}
 
 	passwordResource, err := notifiers.FindSecretResourceName(spec.Secrets, passwordRef)
 	if err != nil {
-		return mailConfig{}, fmt.Errorf("failed to find Secret resource name for reference %q: %v", passwordRef, err)
+		return mailConfig{}, fmt.Errorf("failed to find Secret resource name for reference %q: %w", passwordRef, err)
 	}
 
 	password, err := sg.GetSecret(ctx, passwordResource)
 	if err != nil {
-		return mailConfig{}, fmt.Errorf("failed to get SMTP password: %v", err)
+		return mailConfig{}, fmt.Errorf("failed to get SMTP password: %w", err)
 	}
 
 	return mailConfig{
@@ -152,7 +152,7 @@ func (s *smtpNotifier) sendSMTPNotification(build *cbpb.Build) error {
 	auth := smtp.PlainAuth("", s.mcfg.sender, s.mcfg.password, s.mcfg.server)
 
 	if err = smtp.SendMail(addr, auth, s.mcfg.from, s.mcfg.recipients, []byte(email)); err != nil {
-		return fmt.Errorf("failed to send email: %v", err)
+		return fmt.Errorf("failed to send email: %w", err)
 	}
 	log.V(2).Infoln("email sent successfully")
 	return nil
@@ -161,7 +161,7 @@ func (s *smtpNotifier) sendSMTPNotification(build *cbpb.Build) error {
 func (s *smtpNotifier) buildEmail(build *cbpb.Build) (string, error) {
 	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.EmailMedium)
 	if err != nil {
-		return "", fmt.Errorf("failed to add UTM params: %v", err)
+		return "", fmt.Errorf("failed to add UTM params: %w", err)
 	}
 	build.LogUrl = logURL
 
@@ -193,7 +193,7 @@ func (s *smtpNotifier) buildEmail(build *cbpb.Build) (string, error) {
 	finalMsg := quotedprintable.NewWriter(encoded)
 	finalMsg.Write(body.Bytes())
 	if err := finalMsg.Close(); err != nil {
-		return "", fmt.Errorf("failed to close MIME writer: %v", err)
+		return "", fmt.Errorf("failed to close MIME writer: %w", err)
 	}
 
 	msg += "\r\n" + encoded.String()

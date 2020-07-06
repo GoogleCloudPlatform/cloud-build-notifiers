@@ -92,7 +92,7 @@ func (bqf *actualBQFactory) Make(ctx context.Context) (bq, error) {
 func (n *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ notifiers.SecretGetter) error {
 	prd, err := notifiers.MakeCELPredicate(cfg.Spec.Notification.Filter)
 	if err != nil {
-		return fmt.Errorf("failed to make a CEL predicate: %v", err)
+		return fmt.Errorf("failed to make a CEL predicate: %w", err)
 	}
 	parsed, ok := cfg.Spec.Notification.Delivery["table"].(string)
 	if !ok {
@@ -107,7 +107,7 @@ func (n *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ notifie
 	}
 
 	if err != nil {
-		return fmt.Errorf("Failed to initialize bigquery client: %v", err)
+		return fmt.Errorf("Failed to initialize bigquery client: %w", err)
 	}
 
 	// Extract dataset id and table id from config

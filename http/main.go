@@ -41,7 +41,7 @@ type httpNotifier struct {
 func (h *httpNotifier) SetUp(_ context.Context, cfg *notifiers.Config, _ notifiers.SecretGetter) error {
 	prd, err := notifiers.MakeCELPredicate(cfg.Spec.Notification.Filter)
 	if err != nil {
-		return fmt.Errorf("failed to create CELPredicate: %v", err)
+		return fmt.Errorf("failed to create CELPredicate: %w", err)
 	}
 	h.filter = prd
 
@@ -64,19 +64,19 @@ func (h *httpNotifier) SendNotification(ctx context.Context, build *cbpb.Build) 
 
 	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.HTTPMedium)
 	if err != nil {
-		return fmt.Errorf("failed to add UTM params: %v", err)
+		return fmt.Errorf("failed to add UTM params: %w", err)
 	}
 	build.LogUrl = logURL
 
 	mo := protojson.MarshalOptions{}
 	jb, err := mo.Marshal(proto.MessageV2(build))
 	if err != nil {
-		return fmt.Errorf("failed to marshal Build proto to JSON: %v", err)
+		return fmt.Errorf("failed to marshal Build proto to JSON: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.url, bytes.NewReader(jb))
 	if err != nil {
-		return fmt.Errorf("failed to create a new HTTP request: %v", err)
+		return fmt.Errorf("failed to create a new HTTP request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -84,7 +84,7 @@ func (h *httpNotifier) SendNotification(ctx context.Context, build *cbpb.Build) 
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to make HTTP request: %v", err)
+		return fmt.Errorf("failed to make HTTP request: %w", err)
 	}
 	defer resp.Body.Close()
 
