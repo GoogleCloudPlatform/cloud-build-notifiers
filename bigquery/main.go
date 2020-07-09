@@ -102,19 +102,11 @@ func (bqf *actualBQFactory) Make(ctx context.Context) (bq, error) {
 func parseImageManifest(image string) (*buildImage, error) {
 	ref, err := name.ParseReference(image)
 	if err != nil {
-<<<<<<< HEAD
 		return nil, fmt.Errorf("Error parsing image reference: %v", err)
 	}
 	img, err := remote.Image(ref, remote.WithAuthFromKeychain(google.Keychain))
 	if err != nil {
 		return nil, fmt.Errorf("Error obtaining image reference: %v", err)
-=======
-		panic(err)
-	}
-	img, err := remote.Image(ref, remote.WithAuthFromKeychain(google.Keychain))
-	if err != nil {
-		panic(err)
->>>>>>> c13084f697cf38c9d465b967cd93b12e2e024f5f
 	}
 	sha, err := img.Digest()
 	layers, err := img.Layers()
@@ -187,11 +179,7 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 	newRow.BuildTriggerID = build.BuildTriggerId
 	newRow.Status = build.Status.String()
 	if newRow.Status == "STATUS_UNKNOWN" {
-<<<<<<< HEAD
 		return fmt.Errorf("Build %v has unknown status", newRow.ID)
-=======
-		return fmt.Errorf("Build %v missing status", newRow.ID)
->>>>>>> c13084f697cf38c9d465b967cd93b12e2e024f5f
 	}
 	terminalBuild := false
 	for _, status := range terminalStatusCodes {
