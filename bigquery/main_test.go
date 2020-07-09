@@ -24,6 +24,8 @@ import (
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
 	"google.golang.org/api/googleapi"
+	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type mockBQ struct {
@@ -99,6 +101,9 @@ func (bq *mockBQ) EnsureTable(ctx context.Context, tableName string) error {
 }
 
 func (bq *mockBQ) WriteRow(ctx context.Context, row *bqRow) error {
+	if row == nil {
+		return fmt.Errorf("cannot insert empty row")
+	}
 	return nil
 }
 
@@ -325,6 +330,82 @@ func TestEnsureFunctions(t *testing.T) {
 				t.Fatalf("SetUp(%v) got unexpected error: %v", tc.cfg, err)
 			}
 
+			if tc.wantErr {
+				t.Error("unexpected success")
+			}
+
+		})
+	}
+}
+
+func TestSendNotification(t *testing.T) {
+	cfg := &notifiers.Config{
+		Spec: &notifiers.Spec{
+			Notification: &notifiers.Notification{
+				Filter: `build.build_trigger_id == "1234" `,
+				Delivery: map[string]interface{}{
+					"table": "projects/project_name/datasets/dataset_name/tables/table_name",
+				},
+			},
+		},
+	}
+	for _, tc := range []struct {
+		name    string
+		build   *cbpb.Build
+		wantErr bool
+	}{{
+		name: "mising IDs",
+		build: &cbpb.Build{
+			BuildTriggerId: "1234",
+		},
+		wantErr: true,
+	}, {
+		name: "unknown status",
+		build: &cbpb.Build{
+			ProjectId:      "Project ID",
+			Id:             "Build ID",
+			BuildTriggerId: "1234",
+			Status:         0,
+		},
+		wantErr: true,
+	}, {
+		name: "successful build",
+		build: &cbpb.Build{
+			ProjectId:      "Project ID",
+			Id:             "Build ID",
+			BuildTriggerId: "1234",
+			Status:         3,
+			CreateTime:     timestamppb.Now(),
+			StartTime:      timestamppb.Now(),
+			FinishTime:     timestamppb.Now(),
+			Tags:           []string{},
+			Options:        &cbpb.BuildOptions{Env: []string{}},
+		},
+		wantErr: false,
+	}, {
+		name: "no timestamp build",
+		build: &cbpb.Build{
+			ProjectId:      "Project ID",
+			Id:             "Build ID",
+			BuildTriggerId: "1234",
+			Status:         4,
+		},
+		wantErr: true,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			n := &bqNotifier{bqf: &mockBQFactory{}}
+			err := n.SetUp(context.Background(), cfg, nil)
+			if err != nil {
+				t.Fatalf("Setup(%v) got unexpected error: %v", cfg, err)
+			}
+			err = n.SendNotification(context.Background(), tc.build)
+			if err != nil {
+				if tc.wantErr {
+					t.Logf("got expected error: %v", err)
+					return
+				}
+				t.Fatalf("Send Notification(%v) got unexpected error: %v", tc.build, err)
+			}
 			if tc.wantErr {
 				t.Error("unexpected success")
 			}
