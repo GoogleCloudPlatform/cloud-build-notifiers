@@ -1,9 +1,10 @@
 # Build and test lib/notifiers.
 steps:
-- name: golang
-  args: [go, build, --mod=readonly, '.']
-  env: [GO111MODULE=on]
-- name: golang
-  args: [go, test, --mod=readonly, '.']
-  env: [GO111MODULE=on]
-  
+- name: gcr.io/cloud-builders/docker
+  args:
+  - build
+  - --file=./lib/notifiers/Dockerfile
+  - '.'
+
+tags:
+- cloud-build-notifiers-lib-notifiers
