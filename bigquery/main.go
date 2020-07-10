@@ -31,10 +31,13 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/google"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var tableResource = regexp.MustCompile(".*/.*/.*/(.*)/.*/(.*)")
-var terminalStatusCodes = []string{"SUCCESS", "FAILURE"}
+
+//TODO add all terminal status codes
+var terminalStatusCodes = map[string]int{"SUCCESS": 1, "FAILURE": 1}
 
 func main() {
 	if err := notifiers.Main(&bqNotifier{bqf: &actualBQFactory{}}); err != nil {
@@ -110,7 +113,7 @@ func parseImageManifest(image string) (*buildImage, error) {
 	}
 	sha, err := img.Digest()
 	layers, err := img.Layers()
-	// Calculating the compressed image sie
+	// Calculating the compressed image size
 	totalSum := int64(0)
 	for _, layer := range layers {
 		layerSize, err := layer.Size()
@@ -155,6 +158,15 @@ func (n *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ notifie
 
 }
 
+func parsePBTime(time *timestamppb.Timestamp) (civil.Time, error) {
+	newTime, err := ptypes.Timestamp(time)
+	if err != nil {
+		return civil.Time{}, fmt.Errorf("Error parsing timestamp: %v", err)
+	}
+	return civil.TimeOf(newTime), nil
+
+}
+
 func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) error {
 	if !n.filter.Apply(ctx, build) {
 		log.V(2).Infof("Not doing BQ write for build %v", build.Id)
@@ -167,81 +179,69 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 	if build.ProjectId == "" {
 		return fmt.Errorf("Build missing project id")
 	}
-	if build.Id == "" {
-		return fmt.Errorf("Build missing id")
+	buildStatus := build.Status.String()
+	if buildStatus == "STATUS_UNKNOWN" {
+		return fmt.Errorf("Build %v has unknown status", buildStatus)
 	}
-	newRow := bqRow{}
-	newRow.ProjectID = build.ProjectId
-	newRow.ID = build.Id
-	newRow.BuildTriggerID = build.BuildTriggerId
-	newRow.Status = build.Status.String()
-	if newRow.Status == "STATUS_UNKNOWN" {
-		return fmt.Errorf("Build %v has unknown status", newRow.ID)
-	}
-	terminalBuild := false
-	for _, status := range terminalStatusCodes {
-		if status == newRow.Status {
-			terminalBuild = true
-		}
-	}
-	if !terminalBuild {
-		log.Infof("Not writing non-terminal build step %v", newRow.Status)
+	if _, ok := terminalStatusCodes[buildStatus]; !ok {
+		log.Infof("Not writing non-terminal build step %v", buildStatus)
 		return nil
 	}
-
-	log.Infof("BUILD IMAGES %v", build.GetImages())
-	newRow.Images = []*buildImage{}
+	buildImages := []*buildImage{}
 	for _, image := range build.GetImages() {
 		buildImage, err := parseImageManifest(image)
 		if err != nil {
 			return fmt.Errorf("Error parsing image manifest: %v", err)
 		}
-		newRow.Images = append(newRow.Images, buildImage)
+		buildImages = append(buildImages, buildImage)
 	}
-
-	newRow.Steps = []*buildStep{}
-	createTimePre, err := ptypes.Timestamp(build.CreateTime)
+	buildSteps := []*buildStep{}
+	createTime, err := parsePBTime(build.CreateTime)
 	if err != nil {
-		return fmt.Errorf("Error parsing createTime: %v", err)
+		return fmt.Errorf("Error parsing CreateTime: %v", err)
 	}
-	createTime := civil.TimeOf(createTimePre)
-	startTimePre, err := ptypes.Timestamp(build.CreateTime)
+	startTime, err := parsePBTime(build.StartTime)
 	if err != nil {
-		return fmt.Errorf("Error parsing createTime: %v", err)
+		return fmt.Errorf("Error parsing StartTime: %v", err)
 	}
-	startTime := civil.TimeOf(startTimePre)
-	finishTimePre, err := ptypes.Timestamp(build.CreateTime)
+	finishTime, err := parsePBTime(build.FinishTime)
 	if err != nil {
-		return fmt.Errorf("Error parsing createTime: %v", err)
+		return fmt.Errorf("Error parsing FinishTime: %v", err)
 	}
-	finishTime := civil.TimeOf(finishTimePre)
-	newRow.CreateTime = createTime
-	newRow.StartTime = startTime
-	newRow.FinishTime = finishTime
-	newRow.Tags = build.Tags
-	newRow.Env = build.Options.Env
 
 	for _, step := range build.GetSteps() {
-		newStep := &buildStep{}
-		newStep.Name = step.Name
-		newStep.ID = step.Id
-		newStep.Status = step.GetStatus().String()
-		newStep.Args = step.Args
-		startTimePre, err := ptypes.Timestamp(step.Timing.StartTime)
+		startTime, err := parsePBTime(step.Timing.StartTime)
 		if err != nil {
 			return fmt.Errorf("Error parsing start time for step: %v", err)
 		}
-		startTime := civil.TimeOf(startTimePre)
-		endTimePre, err := ptypes.Timestamp(step.Timing.EndTime)
+		endTime, err := parsePBTime(step.Timing.EndTime)
 		if err != nil {
 			return fmt.Errorf("Error parsing end time for step: %v", err)
 		}
-		endTime := civil.TimeOf(endTimePre)
-		newStep.StartTime = startTime
-		newStep.EndTime = endTime
-		newRow.Steps = append(newRow.Steps, newStep)
+		newStep := &buildStep{
+			Name:      step.Name,
+			ID:        step.Id,
+			Status:    step.GetStatus().String(),
+			Args:      step.Args,
+			StartTime: startTime,
+			EndTime:   endTime,
+		}
+		buildSteps = append(buildSteps, newStep)
 	}
-	err = n.client.WriteRow(ctx, &newRow)
+	newRow := &bqRow{
+		ProjectID:      build.ProjectId,
+		ID:             build.Id,
+		BuildTriggerID: build.BuildTriggerId,
+		Status:         buildStatus,
+		Images:         buildImages,
+		Steps:          buildSteps,
+		CreateTime:     createTime,
+		StartTime:      startTime,
+		FinishTime:     finishTime,
+		Tags:           build.Tags,
+		Env:            build.Options.Env,
+	}
+	err = n.client.WriteRow(ctx, newRow)
 	return nil
 }
 func (bq *actualBQ) EnsureDataset(ctx context.Context, datasetName string) error {
