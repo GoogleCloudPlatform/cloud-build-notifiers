@@ -110,6 +110,7 @@ func parseImageManifest(image string) (*buildImage, error) {
 	}
 	sha, err := img.Digest()
 	layers, err := img.Layers()
+	// Calculating the compressed image sie
 	totalSum := int64(0)
 	for _, layer := range layers {
 		layerSize, err := layer.Size()
@@ -135,10 +136,6 @@ func (n *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ notifie
 	// Initialize client
 	n.filter = prd
 	n.client, err = n.bqf.Make(ctx)
-	if err != nil {
-		return err
-	}
-
 	if err != nil {
 		return fmt.Errorf("Failed to initialize bigquery client: %v", err)
 	}

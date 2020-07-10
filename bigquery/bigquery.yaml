@@ -4,7 +4,7 @@ metadata:
   name: example-bigquery-notifier
 spec:
   notification:
-    filter: build.build_trigger_id == "example_id"
+    filter: build.build_trigger_id == "cc97f48d-8e81-45a9-b80e-a74b3de81e5b"
     delivery:
-      table: projects/project_name/datasets/example_dataset/tables/example_table
+      table: projects/aricz-notifiers-demo/datasets/notifiers_dataset/tables/trigger_table
 
