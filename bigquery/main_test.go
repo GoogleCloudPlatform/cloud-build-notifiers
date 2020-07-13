@@ -17,14 +17,46 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"math/big"
 	"strings"
 	"testing"
 
 	"cloud.google.com/go/bigquery"
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/types"
 	"google.golang.org/api/googleapi"
+	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+type fakeLayer struct {
+	size int64
+}
+
+func (ml *fakeLayer) Digest() (v1.Hash, error) {
+	return v1.Hash{}, nil
+}
+
+func (ml *fakeLayer) DiffID() (v1.Hash, error) {
+	return v1.Hash{}, nil
+}
+
+func (ml *fakeLayer) Compressed() (io.ReadCloser, error) {
+	return nil, nil
+}
+func (ml *fakeLayer) Uncompressed() (io.ReadCloser, error) {
+	return nil, nil
+}
+func (ml *fakeLayer) Size() (int64, error) {
+	return ml.size, nil
+
+}
+func (ml *fakeLayer) MediaType() (types.MediaType, error) {
+	return "", nil
+}
 
 type mockBQ struct {
 }
@@ -99,6 +131,9 @@ func (bq *mockBQ) EnsureTable(ctx context.Context, tableName string) error {
 }
 
 func (bq *mockBQ) WriteRow(ctx context.Context, row *bqRow) error {
+	if row == nil {
+		return fmt.Errorf("cannot insert empty row")
+	}
 	return nil
 }
 
@@ -329,6 +364,135 @@ func TestEnsureFunctions(t *testing.T) {
 				t.Error("unexpected success")
 			}
 
+		})
+	}
+}
+
+func TestSendNotification(t *testing.T) {
+	cfg := &notifiers.Config{
+		Spec: &notifiers.Spec{
+			Notification: &notifiers.Notification{
+				Filter: `build.build_trigger_id == "1234" `,
+				Delivery: map[string]interface{}{
+					"table": "projects/project_name/datasets/dataset_name/tables/table_name",
+				},
+			},
+		},
+	}
+	for _, tc := range []struct {
+		name    string
+		build   *cbpb.Build
+		wantErr bool
+	}{{
+		name: "mising IDs",
+		build: &cbpb.Build{
+			BuildTriggerId: "1234",
+		},
+		wantErr: true,
+	}, {
+		name: "unknown status",
+		build: &cbpb.Build{
+			ProjectId:      "Project ID",
+			Id:             "Build ID",
+			BuildTriggerId: "1234",
+			Status:         0,
+		},
+		wantErr: true,
+	}, {
+		name: "successful build",
+		build: &cbpb.Build{
+			ProjectId:      "Project ID",
+			Id:             "Build ID",
+			BuildTriggerId: "1234",
+			Status:         3,
+			CreateTime:     timestamppb.Now(),
+			StartTime:      timestamppb.Now(),
+			FinishTime:     timestamppb.Now(),
+			Tags:           []string{},
+			Options:        &cbpb.BuildOptions{Env: []string{}},
+		},
+		wantErr: false,
+	}, {
+		name: "no timestamp build",
+		build: &cbpb.Build{
+			ProjectId:      "Project ID",
+			Id:             "Build ID",
+			BuildTriggerId: "1234",
+			Status:         4,
+		},
+		wantErr: true,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			n := &bqNotifier{bqf: &mockBQFactory{}}
+			err := n.SetUp(context.Background(), cfg, nil)
+			if err != nil {
+				t.Fatalf("Setup(%v) got unexpected error: %v", cfg, err)
+			}
+			err = n.SendNotification(context.Background(), tc.build)
+			if err != nil {
+				if tc.wantErr {
+					t.Logf("got expected error: %v", err)
+					return
+				}
+				t.Fatalf("Send Notification(%v) got unexpected error: %v", tc.build, err)
+			}
+			if tc.wantErr {
+				t.Error("unexpected success")
+			}
+
+		})
+	}
+}
+
+func TestGetImageSize(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		layers    []v1.Layer
+		totalSize *big.Rat
+		wantErr   bool
+	}{{
+		name: "valid layers",
+		layers: []v1.Layer{
+			&fakeLayer{
+				size: 10,
+			},
+			&fakeLayer{
+				size: 20,
+			},
+		},
+		totalSize: big.NewRat(30, megaByte),
+		wantErr:   false,
+	}, {
+		name:      "no layers",
+		layers:    []v1.Layer{},
+		totalSize: big.NewRat(0, megaByte),
+		wantErr:   false,
+	}, {
+		name: "empty layers",
+		layers: []v1.Layer{
+			&fakeLayer{},
+			&fakeLayer{
+				size: 20,
+			},
+		},
+		totalSize: big.NewRat(20, int64(1000000)),
+		wantErr:   false,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			calculatedSize, err := getImageSize(tc.layers)
+			if err != nil {
+				if tc.wantErr {
+					t.Logf("got expected error: %v", err)
+					return
+				}
+				t.Fatalf("getImageSize got unexpected error: %v", err)
+			}
+			if calculatedSize.Cmp(tc.totalSize) != 0 {
+				t.Errorf("Expected %v, received %v", tc.totalSize, calculatedSize)
+			}
+			if tc.wantErr {
+				t.Error("unexpected success")
+			}
 		})
 	}
 }
