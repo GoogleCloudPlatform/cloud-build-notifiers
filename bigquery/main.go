@@ -46,6 +46,7 @@ var terminalStatusCodes = map[cbpb.Build_Status]bool{
 	cbpb.Build_EXPIRED:        true,
 }
 
+// TODO(aricz)
 const megaByte = int64(1000000)
 
 func main() {
@@ -116,7 +117,7 @@ func getImageSize(layers []v1.Layer) (*big.Rat, error) {
 	for _, layer := range layers {
 		layerSize, err := layer.Size()
 		if err != nil {
-			return &big.Rat{}, fmt.Errorf("error parsing layer %v: %v", layer, err)
+			return nil, fmt.Errorf("error parsing layer %v: %v", layer, err)
 		}
 		totalSum += layerSize
 	}
@@ -137,7 +138,7 @@ func imageManifestToBuildImage(image string) (*buildImage, error) {
 	// Calculating the compressed image size
 	containerSize, err := getImageSize(layers)
 	if err != nil {
-		return &buildImage{}, err
+		return nil, err
 	}
 
 	return &buildImage{SHA: sha.String(), ContainerSizeMB: containerSize}, nil
@@ -189,7 +190,7 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 		return nil
 	}
 	if build.BuildTriggerId == "" {
-		log.Warningf("build passes filter but does not have trigger ID: %v, status: %v", n.filter, build.GetStatus())
+		log.Warningf("build passes filter but does not have trigger ID, no build data will be captured: %v, status: %v", n.filter, build.GetStatus())
 	}
 	log.Infof("sending Big Query write for build %q (status: %q)", build.Id, build.Status)
 	if build.ProjectId == "" {
