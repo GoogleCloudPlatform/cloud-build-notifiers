@@ -36,7 +36,6 @@ import (
 
 var tableResource = regexp.MustCompile(".*/.*/.*/(.*)/.*/(.*)")
 
-//TODO add all terminal status codes
 var terminalStatusCodes = map[cbpb.Build_Status]bool{
 	cbpb.Build_SUCCESS:        true,
 	cbpb.Build_FAILURE:        true,
@@ -171,7 +170,6 @@ func parsePBTime(time *timestamppb.Timestamp) (civil.Time, error) {
 		return civil.Time{}, fmt.Errorf("Error parsing timestamp: %v", err)
 	}
 	return civil.TimeOf(newTime), nil
-
 }
 
 func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) error {
@@ -186,12 +184,11 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 	if build.ProjectId == "" {
 		return fmt.Errorf("Build missing project id")
 	}
-	buildStatus := build.Status.String()
-	if buildStatus == "STATUS_UNKNOWN" {
-		return fmt.Errorf("Build %v has unknown status", buildStatus)
+	if build.Status == cbpb.Build_STATUS_UNKNOWN {
+		return fmt.Errorf("Build has status: %v", build.Status.String())
 	}
-	if _, ok := terminalStatusCodes[build.Status]; !ok {
-		log.Infof("Not writing non-terminal build step %v", buildStatus)
+	if !terminalStatusCodes[build.Status] {
+		log.Infof("Not writing non-terminal build step %v", build.Status.String())
 		return nil
 	}
 	buildImages := []*buildImage{}
@@ -239,7 +236,7 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 		ProjectID:      build.ProjectId,
 		ID:             build.Id,
 		BuildTriggerID: build.BuildTriggerId,
-		Status:         buildStatus,
+		Status:         build.Status.String(),
 		Images:         buildImages,
 		Steps:          buildSteps,
 		CreateTime:     createTime,
