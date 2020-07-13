@@ -32,29 +32,29 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-type mockLayer struct {
+type fakeLayer struct {
 	size int64
 }
 
-func (ml *mockLayer) Digest() (v1.Hash, error) {
+func (ml *fakeLayer) Digest() (v1.Hash, error) {
 	return v1.Hash{}, nil
 }
 
-func (ml *mockLayer) DiffID() (v1.Hash, error) {
+func (ml *fakeLayer) DiffID() (v1.Hash, error) {
 	return v1.Hash{}, nil
 }
 
-func (ml *mockLayer) Compressed() (io.ReadCloser, error) {
+func (ml *fakeLayer) Compressed() (io.ReadCloser, error) {
 	return nil, nil
 }
-func (ml *mockLayer) Uncompressed() (io.ReadCloser, error) {
+func (ml *fakeLayer) Uncompressed() (io.ReadCloser, error) {
 	return nil, nil
 }
-func (ml *mockLayer) Size() (int64, error) {
+func (ml *fakeLayer) Size() (int64, error) {
 	return ml.size, nil
 
 }
-func (ml *mockLayer) MediaType() (types.MediaType, error) {
+func (ml *fakeLayer) MediaType() (types.MediaType, error) {
 	return "", nil
 }
 
@@ -453,25 +453,25 @@ func TestGetImageSize(t *testing.T) {
 	}{{
 		name: "valid layers",
 		layers: []v1.Layer{
-			&mockLayer{
+			&fakeLayer{
 				size: 10,
 			},
-			&mockLayer{
+			&fakeLayer{
 				size: 20,
 			},
 		},
-		totalSize: big.NewRat(30, int64(1000000)),
+		totalSize: big.NewRat(30, megaByte),
 		wantErr:   false,
 	}, {
 		name:      "no layers",
 		layers:    []v1.Layer{},
-		totalSize: big.NewRat(0, int64(1000000)),
+		totalSize: big.NewRat(0, megaByte),
 		wantErr:   false,
 	}, {
 		name: "empty layers",
 		layers: []v1.Layer{
-			&mockLayer{},
-			&mockLayer{
+			&fakeLayer{},
+			&fakeLayer{
 				size: 20,
 			},
 		},
@@ -479,13 +479,13 @@ func TestGetImageSize(t *testing.T) {
 		wantErr:   false,
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			calculatedSize, err := GetImageSize(tc.layers)
+			calculatedSize, err := getImageSize(tc.layers)
 			if err != nil {
 				if tc.wantErr {
 					t.Logf("got expected error: %v", err)
 					return
 				}
-				t.Fatalf("GetImageSize got unexpected error: %v", err)
+				t.Fatalf("getImageSize got unexpected error: %v", err)
 			}
 			if calculatedSize.Cmp(tc.totalSize) != 0 {
 				t.Errorf("Expected %v, received %v", tc.totalSize, calculatedSize)
@@ -493,7 +493,6 @@ func TestGetImageSize(t *testing.T) {
 			if tc.wantErr {
 				t.Error("unexpected success")
 			}
-
 		})
 	}
 }
