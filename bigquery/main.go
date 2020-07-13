@@ -37,7 +37,14 @@ import (
 var tableResource = regexp.MustCompile(".*/.*/.*/(.*)/.*/(.*)")
 
 //TODO add all terminal status codes
-var terminalStatusCodes = map[string]int{"SUCCESS": 1, "FAILURE": 1}
+var terminalStatusCodes = map[cbpb.Build_Status]bool{
+	cbpb.Build_SUCCESS:        true,
+	cbpb.Build_FAILURE:        true,
+	cbpb.Build_INTERNAL_ERROR: true,
+	cbpb.Build_TIMEOUT:        true,
+	cbpb.Build_CANCELLED:      true,
+	cbpb.Build_EXPIRED:        true,
+}
 
 func main() {
 	if err := notifiers.Main(&bqNotifier{bqf: &actualBQFactory{}}); err != nil {
@@ -102,7 +109,7 @@ func (bqf *actualBQFactory) Make(ctx context.Context) (bq, error) {
 	return newClient, nil
 }
 
-func parseImageManifest(image string) (*buildImage, error) {
+func imageManifestToBuildImage(image string) (*buildImage, error) {
 	ref, err := name.ParseReference(image)
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing image reference: %v", err)
@@ -183,13 +190,13 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 	if buildStatus == "STATUS_UNKNOWN" {
 		return fmt.Errorf("Build %v has unknown status", buildStatus)
 	}
-	if _, ok := terminalStatusCodes[buildStatus]; !ok {
+	if _, ok := terminalStatusCodes[build.Status]; !ok {
 		log.Infof("Not writing non-terminal build step %v", buildStatus)
 		return nil
 	}
 	buildImages := []*buildImage{}
 	for _, image := range build.GetImages() {
-		buildImage, err := parseImageManifest(image)
+		buildImage, err := imageManifestToBuildImage(image)
 		if err != nil {
 			return fmt.Errorf("Error parsing image manifest: %v", err)
 		}
@@ -241,8 +248,7 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 		Tags:           build.Tags,
 		Env:            build.Options.Env,
 	}
-	err = n.client.WriteRow(ctx, newRow)
-	return nil
+	return n.client.WriteRow(ctx, newRow)
 }
 func (bq *actualBQ) EnsureDataset(ctx context.Context, datasetName string) error {
 	// Check for existence of dataset, create if false
@@ -279,7 +285,7 @@ func (bq *actualBQ) EnsureTable(ctx context.Context, tableName string) error {
 
 func (bq *actualBQ) WriteRow(ctx context.Context, row *bqRow) error {
 	ins := bq.table.Inserter()
-	log.Infof("Writing row: %v", row)
+	log.V(2).Infof("Writing row: %v", row)
 	if err := ins.Put(ctx, row); err != nil {
 		return fmt.Errorf("Error inserting row into BQ: %v", err)
 	}
