@@ -17,16 +17,46 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"math/big"
 	"strings"
 	"testing"
 
 	"cloud.google.com/go/bigquery"
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/types"
 	"google.golang.org/api/googleapi"
 	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+type mockLayer struct {
+	size int64
+}
+
+func (ml *mockLayer) Digest() (v1.Hash, error) {
+	return v1.Hash{}, nil
+}
+
+func (ml *mockLayer) DiffID() (v1.Hash, error) {
+	return v1.Hash{}, nil
+}
+
+func (ml *mockLayer) Compressed() (io.ReadCloser, error) {
+	return nil, nil
+}
+func (ml *mockLayer) Uncompressed() (io.ReadCloser, error) {
+	return nil, nil
+}
+func (ml *mockLayer) Size() (int64, error) {
+	return ml.size, nil
+
+}
+func (ml *mockLayer) MediaType() (types.MediaType, error) {
+	return "", nil
+}
 
 type mockBQ struct {
 }
@@ -405,6 +435,60 @@ func TestSendNotification(t *testing.T) {
 					return
 				}
 				t.Fatalf("Send Notification(%v) got unexpected error: %v", tc.build, err)
+			}
+			if tc.wantErr {
+				t.Error("unexpected success")
+			}
+
+		})
+	}
+}
+
+func TestGetImageSize(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		layers    []v1.Layer
+		totalSize *big.Rat
+		wantErr   bool
+	}{{
+		name: "valid layers",
+		layers: []v1.Layer{
+			&mockLayer{
+				size: 10,
+			},
+			&mockLayer{
+				size: 20,
+			},
+		},
+		totalSize: big.NewRat(30, int64(1000000)),
+		wantErr:   false,
+	}, {
+		name:      "no layers",
+		layers:    []v1.Layer{},
+		totalSize: big.NewRat(0, int64(1000000)),
+		wantErr:   false,
+	}, {
+		name: "empty layers",
+		layers: []v1.Layer{
+			&mockLayer{},
+			&mockLayer{
+				size: 20,
+			},
+		},
+		totalSize: big.NewRat(20, int64(1000000)),
+		wantErr:   false,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			calculatedSize, err := GetImageSize(tc.layers)
+			if err != nil {
+				if tc.wantErr {
+					t.Logf("got expected error: %v", err)
+					return
+				}
+				t.Fatalf("GetImageSize got unexpected error: %v", err)
+			}
+			if calculatedSize.Cmp(tc.totalSize) != 0 {
+				t.Errorf("Expected %v, received %v", tc.totalSize, calculatedSize)
 			}
 			if tc.wantErr {
 				t.Error("unexpected success")

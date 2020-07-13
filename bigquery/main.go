@@ -28,6 +28,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/google"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
@@ -108,6 +109,19 @@ func (bqf *actualBQFactory) Make(ctx context.Context) (bq, error) {
 	return newClient, nil
 }
 
+// GetImageSize calculates the total compressed size of an image by summing it's individual layers
+func GetImageSize(layers []v1.Layer) (*big.Rat, error) {
+	totalSum := int64(0)
+	for _, layer := range layers {
+		layerSize, err := layer.Size()
+		if err != nil {
+			return &big.Rat{}, fmt.Errorf("Error parsing layer %v: %v", layer, err)
+		}
+		totalSum += layerSize
+	}
+	return big.NewRat(totalSum, int64(1000000)), nil
+}
+
 func imageManifestToBuildImage(image string) (*buildImage, error) {
 	ref, err := name.ParseReference(image)
 	if err != nil {
@@ -120,15 +134,11 @@ func imageManifestToBuildImage(image string) (*buildImage, error) {
 	sha, err := img.Digest()
 	layers, err := img.Layers()
 	// Calculating the compressed image size
-	totalSum := int64(0)
-	for _, layer := range layers {
-		layerSize, err := layer.Size()
-		if err != nil {
-			return nil, fmt.Errorf("Error parsing layer %v: %v", layer, err)
-		}
-		totalSum += layerSize
+	containerSize, err := GetImageSize(layers)
+	if err != nil {
+		return &buildImage{}, err
 	}
-	containerSize := big.NewRat(totalSum, int64(1000000))
+
 	return &buildImage{SHA: sha.String(), ContainerSizeMB: containerSize}, nil
 }
 
