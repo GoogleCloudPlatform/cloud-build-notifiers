@@ -68,15 +68,9 @@ type bqRow struct {
 	Status         string
 	Images         []*buildImage
 	Steps          []*buildStep
-<<<<<<< HEAD
 	CreateTime     civil.DateTime
 	StartTime      civil.DateTime
 	FinishTime     civil.DateTime
-=======
-	CreateTime     civil.Time
-	StartTime      civil.Time
-	FinishTime     civil.Time
->>>>>>> f80a3aa6748e267f8a272698bcfb2db06300e22b
 	Tags           []string
 	Env            []string
 }
