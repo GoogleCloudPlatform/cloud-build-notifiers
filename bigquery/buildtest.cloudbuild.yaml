@@ -19,5 +19,5 @@ steps:
       - --file=./bigquery/Dockerfile
       - '.'
 
-    tags:
-    - cloud-build-notifiers-bigquery
+tags:
+- cloud-build-notifiers-bigquery
