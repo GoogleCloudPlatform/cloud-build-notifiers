@@ -68,9 +68,9 @@ type bqRow struct {
 	Status         string
 	Images         []*buildImage
 	Steps          []*buildStep
-	CreateTime     civil.Time
-	StartTime      civil.Time
-	FinishTime     civil.Time
+	CreateTime     civil.DateTime
+	StartTime      civil.DateTime
+	FinishTime     civil.DateTime
 	Tags           []string
 	Env            []string
 }
@@ -85,8 +85,8 @@ type buildStep struct {
 	ID        string
 	Status    string
 	Args      []string
-	StartTime civil.Time
-	EndTime   civil.Time
+	StartTime civil.DateTime
+	EndTime   civil.DateTime
 }
 
 type actualBQ struct {
@@ -176,12 +176,12 @@ func (n *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ notifie
 
 }
 
-func parsePBTime(time *timestamppb.Timestamp) (civil.Time, error) {
+func parsePBTime(time *timestamppb.Timestamp) (civil.DateTime, error) {
 	newTime, err := ptypes.Timestamp(time)
 	if err != nil {
-		return civil.Time{}, fmt.Errorf("error parsing timestamp: %v", err)
+		return civil.DateTime{}, fmt.Errorf("error parsing timestamp: %v", err)
 	}
-	return civil.TimeOf(newTime), nil
+	return civil.DateTimeOf(newTime), nil
 }
 
 func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) error {
