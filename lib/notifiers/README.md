@@ -27,9 +27,13 @@ testing a trigger
 testing more triggers
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 testing notrust triggers
 =======
 >>>>>>> 56daa9a... another one
 =======
 testing notrust triggers
 >>>>>>> 6d51f33... and another one
+=======
+testing notrust triggers
+>>>>>>> 8046870ba91281d19f07154630ac9085c664196b
