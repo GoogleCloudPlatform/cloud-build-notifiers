@@ -27,22 +27,21 @@ steps:
     args:
     - --smoketest
     - --alsologtostderr
-  
-  # Push the image with tags.
-  images:
+
+# Push the image with tags.
+images:
   - ${_REGISTRY}/bigquery:${TAG_NAME}
   - ${_REGISTRY}/bigquery:${_MAJOR_LATEST}
   - ${_REGISTRY}/bigquery:latest
   
-  options:
-    dynamic_substitutions: true
+options:
+  dynamic_substitutions: true
   
-  substitutions:
-    _REGISTRY: us-east1-docker.pkg.dev/gcb-release/cloud-build-notifiers
-    # Looks like: $NOTIF-$MAJOR-latest. Not meant for overriding.
-    _MAJOR_LATEST: "${TAG_NAME%%.*}-latest"
+substitutions:
+  _REGISTRY: us-east1-docker.pkg.dev/gcb-release/cloud-build-notifiers
+  # Looks like: $NOTIF-$MAJOR-latest. Not meant for overriding.
+  _MAJOR_LATEST: "${TAG_NAME%%.*}-latest"
   
-  tags:
-  - cloud-build-notifiers-bigquery
-  - bigquery-${TAG_NAME}
-  
+tags:
+- cloud-build-notifiers-bigquery
+- bigquery-${TAG_NAME}
