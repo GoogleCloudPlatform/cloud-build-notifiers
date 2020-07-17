@@ -39,7 +39,7 @@ FROM (SELECT DATETIME_TRUNC(CreateTime, WEEK) AS WEEK,
       FROM `dataset.table` 
       WHERE STATUS="SUCCESS") 
 WHERE WEEK = DATETIME_TRUNC(CURRENT_DATETIME(), WEEK) 
-GROUP BY DAY'
+GROUP BY DAY
 
 # Calculating build times
 
