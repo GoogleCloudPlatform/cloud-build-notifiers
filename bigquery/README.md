@@ -6,6 +6,8 @@ This notifier pushes build data to a BigQuery instance.
 
 ## Accessing build insights with SQL queries through the BigQuery CLI:
 
+To access BQ data through queries, run the following command below.
+
 ```bash
 $ bq query '<SQL QUERY>'
 ```
@@ -16,7 +18,7 @@ This can be done by editing ```~/.bigqueryrc``` and adding the following lines:
 [query]
 --use_legacy_sql=false
 ```
-More information can be found [here](https://cloud.google.com/bigquery/docs/reference/standard-sql/enabling-standard-sql).
+More information can be found here: [Switching SQL Dialects](https://cloud.google.com/bigquery/docs/reference/standard-sql/enabling-standard-sql).
 
 ### Example Queries:
 
