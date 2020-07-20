@@ -10,7 +10,7 @@ This notifier pushes build data to a BigQuery instance.
 $ bq query '<SQL QUERY>'
 ```
 Legacy SQL dialect is set on default for the BigQuery CLI and must be disabled for the example queries to work.
-This can be done by editing ~/.bigqueryrc and adding the following lines:
+This can be done by editing ```~/.bigqueryrc``` and adding the following lines:
 
 ```
 [query]
@@ -18,7 +18,8 @@ This can be done by editing ~/.bigqueryrc and adding the following lines:
 ```
 More information can be found [here](https://cloud.google.com/bigquery/docs/reference/standard-sql/enabling-standard-sql).
 
-Example Queries:
+### Example Queries:
+
 ```sql
 # Listing overall build history
 
