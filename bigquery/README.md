@@ -15,7 +15,7 @@ $ bq query '<SQL QUERY>'
 More detailed information can be found here: [BQ CLI Reference](https://cloud.google.com/bigquery/docs/bq-command-line-tool)
 
 Legacy SQL dialect is set on default for the BigQuery CLI and must be disabled for the example queries to work.
-This can be done by adding the the ```--nouse_legacy_sql``` flag:
+This can be done by adding the the `--nouse_legacy_sql` flag:
 
 ```bash
 $ bq query --nouse_legacy_sql '<SQL QUERY>'
