@@ -8,9 +8,12 @@ This notifier pushes build data to a BigQuery instance.
 
 To access BQ data through queries, run the following command below.
 
+
 ```bash
 $ bq query '<SQL QUERY>'
 ```
+More detailed information can be found here: [BQ CLI Reference](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_query)
+
 Legacy SQL dialect is set on default for the BigQuery CLI and must be disabled for the example queries to work.
 This can be done by editing ```~/.bigqueryrc``` and adding the following lines:
 
