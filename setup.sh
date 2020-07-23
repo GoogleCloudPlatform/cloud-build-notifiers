@@ -89,7 +89,7 @@ main () {
   DESTINATION_BUCKET_NAME="${PROJECT_ID}-notifiers-config"
   DESTINATION_BUCKET_URI="gs://${DESTINATION_BUCKET_NAME}"
   DESTINATION_CONFIG_PATH="${DESTINATION_BUCKET_URI}/${SOURCE_CONFIG_BASENAME}"
-  IMAGE_PATH="us-east1-docker.pkg.dev/gcb-release/cloud-build-notifiers/${NOTIFIER_TYPE}:latest"
+  IMAGE_PATH="gcr.io/aricz-notifiers-demo/cloud-build-notifiers/${NOTIFIER_TYPE}:latest"
   SERVICE_NAME="${NOTIFIER_TYPE}-notifier"
   SUBSCRIPTION_NAME="${NOTIFIER_TYPE}-subscription"
   INVOKER_SA="cloud-run-pubsub-invoker@${PROJECT_ID}.iam.gserviceaccount.com"
@@ -103,6 +103,7 @@ main () {
     add_secret_name_accessor_permission
   fi
 
+  check_apis_enabled
   upload_config
   deploy_notifier
   SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" \
@@ -110,6 +111,8 @@ main () {
   add_sa_token_creator_permission
   create_invoker_sa
   add_invoker_permission
+  create_pubsub_topic
+  check_pubsub_topic
   create_pubsub_subscription
   check_pubsub_subscription
 
@@ -119,6 +122,16 @@ main () {
 fail () {
   echo "$*" 1>&2
   exit 1
+}
+
+check_apis_enabled () {
+  SERVICES=`gcloud services list --enabled`
+  for API in 'Cloud Build API' 'Cloud Run Admin API' 'Cloud Pub/Sub API' 'Secret Manager API';
+    do
+      if [[ ${SERVICES} != *${API}* ]]; then
+        fail "please enable the ${API}"
+      fi
+    done
 }
 
 add_secret_name_accessor_permission () {
@@ -161,6 +174,15 @@ add_invoker_permission () {
   gcloud run services add-iam-policy-binding "${SERVICE_NAME}" \
     --member="serviceAccount:${INVOKER_SA}" \
     --role=roles/run.invoker
+}
+
+create_pubsub_topic () {
+  gcloud pubsub topics create cloud-builds
+}
+
+check_pubsub_topic () {
+  gcloud pubsub topics describe cloud-builds \
+    || fail "expected the notifier Pub/Sub topic cloud-builds to exist"
 }
 
 create_pubsub_subscription () {
