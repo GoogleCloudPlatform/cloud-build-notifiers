@@ -126,7 +126,7 @@ fail() {
 check_apis_enabled() {
   SERVICES=$(gcloud services list --enabled --format='value(config.title)')
   for API in "${REQUIRED_SERVICES[@]}"; do
-    echo "${SERVICES}" | grep "${API}" || fail "please enable the ${API}"
+    [ -z ${SERVICES[@]/*${API}*/} ] || fail "please enable the ${API}"
   done
 }
 
