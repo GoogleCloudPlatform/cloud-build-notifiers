@@ -31,7 +31,7 @@ import (
 
 const (
 	contentType    = "text/html"
-	defaultSubject = "Cloud Build {{.ProjectId}: {{.Id}}"
+	defaultSubject = "Cloud Build {{.ProjectId}}: {{.Id}}"
 )
 
 func main() {

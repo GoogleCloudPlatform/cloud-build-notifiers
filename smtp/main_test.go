@@ -36,7 +36,6 @@ func (f *fakeSecretGetter) GetSecret(_ context.Context, _ string) (string, error
 }
 
 func TestGetMailConfig(t *testing.T) {
-
 	for _, tc := range []struct {
 		name       string
 		spec       *notifiers.Spec
@@ -210,5 +209,43 @@ func TestDefaultEmailTemplate(t *testing.T) {
 
 	if !strings.Contains(body.String(), `<a href="https://some.example.com/log/url">`) {
 		t.Error("missing Log URL")
+	}
+}
+
+func TestBuildEmail(t *testing.T) {
+	build := &cbpb.Build{
+		Id:             "some-build-id",
+		ProjectId:      "my-project-id",
+		BuildTriggerId: "some-trigger-id",
+		Status:         cbpb.Build_SUCCESS,
+		LogUrl:         "https://some.example.com/log/url",
+	}
+	cfg := &notifiers.Config{
+		Spec: &notifiers.Spec{
+			Notification: &notifiers.Notification{
+				Filter: `true`,
+				Delivery: map[string]interface{}{
+					"server":     "smtp.example.com",
+					"port":       "4040",
+					"password":   map[interface{}]interface{}{"secretRef": "my-smtp-password"},
+					"sender":     "me@example.com",
+					"from":       "another_me@example.com",
+					"recipients": []interface{}{"my-cto@example.com", "my-friend@example.com"},
+				},
+			},
+			Secrets: []*notifiers.Secret{{LocalName: "my-smtp-password", ResourceName: "/does/not/matter"}},
+		},
+	}
+	notifier := &smtpNotifier{}
+	if err := notifier.SetUp(context.Background(), cfg, new(fakeSecretGetter)); err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+
+	msg, err := notifier.buildEmail(build)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(msg, "Subject: Cloud Build my-project-id: some-build-id") {
+		t.Error("missing subject")
 	}
 }
