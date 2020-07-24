@@ -237,15 +237,24 @@ func TestBuildEmail(t *testing.T) {
 		},
 	}
 	notifier := &smtpNotifier{}
-	if err := notifier.SetUp(context.Background(), cfg, new(fakeSecretGetter)); err != nil {
-		t.Fatalf("Setup: %v", err)
-	}
 
-	msg, err := notifier.buildEmail(build)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(msg, "Subject: Cloud Build my-project-id: some-build-id") {
-		t.Error("missing subject")
+	for _, tc := range []struct{ name, subject, wantSubject string }{
+		{"default subject", defaultSubject, "Subject: Cloud Build my-project-id: some-build-id"},
+		{"template subject", "my subject {{.Status}} {{.BuildTriggerId}}", "Subject: my subject SUCCESS some-trigger-id"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg.Spec.Notification.Delivery["subject"] = tc.subject
+			if err := notifier.SetUp(context.Background(), cfg, new(fakeSecretGetter)); err != nil {
+				t.Fatalf("Setup: %v", err)
+			}
+			msg, err := notifier.buildEmail(build)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(msg, tc.wantSubject) {
+				t.Errorf("missing subject %q", tc.wantSubject)
+				t.Log("got:\n", msg)
+			}
+		})
 	}
 }
