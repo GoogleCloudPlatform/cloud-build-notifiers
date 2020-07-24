@@ -30,7 +30,8 @@ import (
 )
 
 const (
-	contentType = "text/html"
+	contentType    = "text/html"
+	defaultSubject = "Cloud Build {{.ProjectId}: {{.Id}}"
 )
 
 func main() {
@@ -46,8 +47,8 @@ type smtpNotifier struct {
 }
 
 type mailConfig struct {
-	server, port, sender, from, password string
-	recipients                           []string
+	server, port, sender, from, subject, password string
+	recipients                                    []string
 }
 
 func (s *smtpNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg notifiers.SecretGetter) error {
@@ -93,6 +94,11 @@ func getMailConfig(ctx context.Context, sg notifiers.SecretGetter, spec *notifie
 		return mailConfig{}, fmt.Errorf("expected delivery config %v to have string field `from`", delivery)
 	}
 
+	subject, ok := delivery["subject"].(string)
+	if !ok {
+		subject = defaultSubject
+	}
+
 	ris, ok := delivery["recipients"].([]interface{})
 	if !ok {
 		return mailConfig{}, fmt.Errorf("expected delivery config %v to have repeated field `recipients`", delivery)
@@ -127,6 +133,7 @@ func getMailConfig(ctx context.Context, sg notifiers.SecretGetter, spec *notifie
 		port:       port,
 		sender:     sender,
 		from:       from,
+		subject:    subject,
 		password:   password,
 		recipients: recipients,
 	}, nil
@@ -170,7 +177,14 @@ func (s *smtpNotifier) buildEmail(build *cbpb.Build) (string, error) {
 		return "", err
 	}
 
-	subject := fmt.Sprintf("Cloud Build [%s]: %s", build.ProjectId, build.Id)
+	tmpl, err := template.New("subject").Parse(s.mcfg.subject)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse subject %q: %w", s.mcfg.subject, err)
+	}
+	subject := new(bytes.Buffer)
+	if err := tmpl.Execute(subject, build); err != nil {
+		return "", err
+	}
 
 	header := make(map[string]string)
 	if s.mcfg.from != s.mcfg.sender {
@@ -178,7 +192,7 @@ func (s *smtpNotifier) buildEmail(build *cbpb.Build) (string, error) {
 	}
 	header["From"] = s.mcfg.from
 	header["To"] = strings.Join(s.mcfg.recipients, ",")
-	header["Subject"] = subject
+	header["Subject"] = subject.String()
 	header["MIME-Version"] = "1.0"
 	header["Content-Type"] = fmt.Sprintf(`%s; charset="utf-8"`, contentType)
 	header["Content-Transfer-Encoding"] = "quoted-printable"

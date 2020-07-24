@@ -65,6 +65,33 @@ func TestGetMailConfig(t *testing.T) {
 				password:   password,
 				sender:     "me@example.com",
 				from:       "another_me@example.com",
+				subject:    defaultSubject,
+				recipients: []string{"my-cto@example.com", "my-friend@example.com"},
+			},
+		}, {
+			name: "subject configured",
+			spec: &notifiers.Spec{
+				Notification: &notifiers.Notification{
+					Filter: `event.status == "SUCCESS"`,
+					Delivery: map[string]interface{}{
+						"server":     "smtp.example.com",
+						"port":       "4040",
+						"password":   map[interface{}]interface{}{"secretRef": "my-smtp-password"},
+						"sender":     "me@example.com",
+						"from":       "another_me@example.com",
+						"recipients": []interface{}{"my-cto@example.com", "my-friend@example.com"},
+						"subject":    "my custom subject",
+					},
+				},
+				Secrets: []*notifiers.Secret{{LocalName: "my-smtp-password", ResourceName: "/does/not/matter"}},
+			},
+			wantConfig: mailConfig{
+				server:     "smtp.example.com",
+				port:       "4040",
+				password:   password,
+				sender:     "me@example.com",
+				from:       "another_me@example.com",
+				subject:    "my custom subject",
 				recipients: []string{"my-cto@example.com", "my-friend@example.com"},
 			},
 		}, {
@@ -116,6 +143,7 @@ spec:
       port: '587'
       sender: my-notifier@example.com
       from: my-notifier-from@example.com
+      subject: 'my custom subject'
       password:
         secretRef: smtp-password
       recipients:
@@ -132,6 +160,7 @@ spec:
 		password:   password,
 		sender:     "my-notifier@example.com",
 		from:       "my-notifier-from@example.com",
+		subject:    "my custom subject",
 		recipients: []string{"some-eng@example.com", "me@example.com"},
 	}
 
