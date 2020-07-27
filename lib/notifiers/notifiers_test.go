@@ -39,14 +39,14 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func convertToTimestamp(datetime string) *timestamppb.Timestamp {
+func convertToTimestamp(t *testing.T, datetime string) *timestamppb.Timestamp {
 	timestamp, err := time.Parse(time.RFC3339, datetime)
 	if err != nil {
-		panic(err)
+		t.Fatalf("Failed to parse datetime string: %v", err)
 	}
 	ppbtimestamp, err := ptypes.TimestampProto(timestamp)
 	if err != nil {
-		panic(err)
+		t.Fatalf("Failed to parse timestamp: %v", err)
 	}
 	return ppbtimestamp
 }
@@ -122,61 +122,61 @@ func TestMakeCELPredicate(t *testing.T) {
 		}, {
 			name:      "before timestamp",
 			filter:    `timestamp("2020-01-01T10:00:20.021-05:00") <= build.start_time`,
-			build:     &cbpb.Build{StartTime: convertToTimestamp("2019-01-01T10:00:20.021-05:00")},
+			build:     &cbpb.Build{StartTime: convertToTimestamp(t, "2019-01-01T10:00:20.021-05:00")},
 			wantMatch: false,
 		},
 		{
 			name:      "after timestamp",
 			filter:    `timestamp("1972-01-01T10:00:20.021-05:00") < build.start_time`,
-			build:     &cbpb.Build{StartTime: convertToTimestamp("2019-01-01T10:00:20.000-05:00")},
+			build:     &cbpb.Build{StartTime: convertToTimestamp(t, "2019-01-01T10:00:20.000-05:00")},
 			wantMatch: true,
 		},
 		{
 			name:      "before integer year",
 			filter:    `timestamp("2019-01-01T10:00:20.000-05:00") > build.start_time`,
-			build:     &cbpb.Build{StartTime: convertToTimestamp("2018-01-01T10:00:20.000-05:00")},
+			build:     &cbpb.Build{StartTime: convertToTimestamp(t, "2018-01-01T10:00:20.000-05:00")},
 			wantMatch: true,
 		},
 		{
 			name:      "after integer year",
 			filter:    `timestamp("2019-01-01T10:00:20.000-05:00") < build.start_time`,
-			build:     &cbpb.Build{StartTime: convertToTimestamp("2020-01-01T10:00:20.000-05:00")},
+			build:     &cbpb.Build{StartTime: convertToTimestamp(t, "2020-01-01T10:00:20.000-05:00")},
 			wantMatch: true,
 		},
 		{
 			name:      "specific day match",
 			filter:    `timestamp("2019-07-24T00:00:00.000-05:00") <= build.start_time && build.start_time < timestamp("2019-07-25T00:00:00.000-05:00")`,
-			build:     &cbpb.Build{StartTime: convertToTimestamp("2019-07-24T12:00:00.000-00:00")},
+			build:     &cbpb.Build{StartTime: convertToTimestamp(t, "2019-07-24T12:00:00.000-00:00")},
 			wantMatch: true,
 		},
 		{
 			name:      "not specific day match",
 			filter:    `timestamp("2020-07-24T00:00:00.000-00:00") <= build.start_time && build.start_time < timestamp("2020-07-25T00:00:00.000-00:00")`,
-			build:     &cbpb.Build{StartTime: convertToTimestamp("2019-07-23T00:00:00.000-05:00")},
+			build:     &cbpb.Build{StartTime: convertToTimestamp(t, "2019-07-23T00:00:00.000-05:00")},
 			wantMatch: false,
 		},
 		{
 			name:      "first of the month",
 			filter:    `build.start_time.getDayOfMonth() == 0`,
-			build:     &cbpb.Build{StartTime: convertToTimestamp("2019-07-02T00:00:00.000-00:00")},
+			build:     &cbpb.Build{StartTime: convertToTimestamp(t, "2019-07-02T00:00:00.000-00:00")},
 			wantMatch: false,
 		},
 		{
 			name:      "first of the month match",
 			filter:    `build.start_time.getDayOfMonth()==0`,
-			build:     &cbpb.Build{StartTime: convertToTimestamp("2019-07-01T12:00:00.000-00:00")},
+			build:     &cbpb.Build{StartTime: convertToTimestamp(t, "2019-07-01T12:00:00.000-00:00")},
 			wantMatch: true,
 		},
 		{
 			name:      "build at least five minutes",
 			filter:    `build.finish_time - build.start_time >= duration("300s")`,
-			build:     &cbpb.Build{StartTime: convertToTimestamp("2019-07-01T12:00:00.000-00:00"), FinishTime: convertToTimestamp("2019-07-01T12:10:00.000-00:00")},
+			build:     &cbpb.Build{StartTime: convertToTimestamp(t, "2019-07-01T12:00:00.000-00:00"), FinishTime: convertToTimestamp(t, "2019-07-01T12:10:00.000-00:00")},
 			wantMatch: true,
 		},
 		{
 			name:      "build shorter than five minutes",
 			filter:    `build.finish_time - build.start_time < duration("300s")`,
-			build:     &cbpb.Build{StartTime: convertToTimestamp("2019-07-01T12:00:00.000-00:00"), FinishTime: convertToTimestamp("2019-07-01T12:00:03.000-00:00")},
+			build:     &cbpb.Build{StartTime: convertToTimestamp(t, "2019-07-01T12:00:00.000-00:00"), FinishTime: convertToTimestamp(t, "2019-07-01T12:00:03.000-00:00")},
 			wantMatch: true,
 		},
 	} {
