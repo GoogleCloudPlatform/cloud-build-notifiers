@@ -73,6 +73,7 @@ type bqRow struct {
 	FinishTime     civil.DateTime
 	Tags           []string
 	Env            []string
+	LogURL         string
 }
 
 type buildImage struct {
@@ -244,6 +245,10 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 		}
 		buildSteps = append(buildSteps, newStep)
 	}
+	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.OtherMedium)
+	if err != nil {
+		return fmt.Errorf("Error generating UTM params: %v", err)
+	}
 	newRow := &bqRow{
 		ProjectID:      build.ProjectId,
 		ID:             build.Id,
@@ -256,6 +261,7 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 		FinishTime:     finishTime,
 		Tags:           build.Tags,
 		Env:            build.Options.Env,
+		LogURL:         logURL,
 	}
 	return n.client.WriteRow(ctx, newRow)
 }
