@@ -2,7 +2,18 @@
 
 This notifier pushes build data to a BigQuery instance.
 
-*Alpha Feature - Under Development*
+This notifier runs as a container via Google Cloud Run and responds to
+events that Cloud Build publishes via its
+[Pub/Sub topic](https://cloud.google.com/cloud-build/docs/send-build-notifications).
+
+For detailed instructions on setting up this notifier,
+see [Configuring BigQuery notifications](TODO).
+
+## Configuration Variables
+
+This notifier expects the following fields in the `delivery` map to be set:
+
+- `table`: Full path for the BigQuery table to which build data writes will be sent. 
 
 ## Accessing build insights with SQL queries through the BigQuery CLI:
 
