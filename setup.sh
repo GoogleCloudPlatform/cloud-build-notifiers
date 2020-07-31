@@ -98,13 +98,11 @@ main() {
   # don't log spam unnecessarily.
   set -x
 
-
   check_apis_enabled
 
   if [ -n "${SECRET_NAME}" ]; then
     add_secret_name_accessor_permission
   fi
-
 
   upload_config
   deploy_notifier
