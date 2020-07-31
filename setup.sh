@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Copyright 2020 Google LLC
 # Author: lru@google.com (Leo Rudberg)
 
