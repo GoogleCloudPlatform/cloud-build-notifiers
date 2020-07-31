@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Copyright 2020 Google LLC
 # Author: lru@google.com (Leo Rudberg)
 
@@ -98,12 +98,14 @@ main() {
   # don't log spam unnecessarily.
   set -x
 
-  if [ -n "${SECRET_NAME}" ]; then
-    add_secret_name_accessor_permission
-    REQUIRED_SERVICES += ('Secret Manager API')
-  fi
 
   check_apis_enabled
+
+  if [ -n "${SECRET_NAME}" ]; then
+    add_secret_name_accessor_permission
+  fi
+
+
   upload_config
   deploy_notifier
   SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" \
@@ -125,6 +127,9 @@ fail() {
 }
 
 check_apis_enabled() {
+  if [ -n "${SECRET_NAME}" ]; then
+    REQUIRED_SERVICES+=('Secret Manager API')
+  fi
   SERVICES=$(gcloud services list --enabled --format='value(config.title)')
   for API in "${REQUIRED_SERVICES[@]}"; do
     [ -z ${SERVICES[@]/*${API}*/} ] || fail "please enable the ${API}"
