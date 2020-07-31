@@ -83,7 +83,7 @@ main() {
     --format="value(projectNumber)") ||
     fail "could not get project number"
 
-  REQUIRED_SERVICES=('Cloud Build API' 'Cloud Run Admin API' 'Cloud Pub/Sub API' 'Secret Manager API')
+  REQUIRED_SERVICES=('Cloud Build API' 'Cloud Run Admin API' 'Cloud Pub/Sub API')
   SOURCE_CONFIG_BASENAME=$(basename "${SOURCE_CONFIG_PATH}")
   DESTINATION_BUCKET_NAME="${PROJECT_ID}-notifiers-config"
   DESTINATION_BUCKET_URI="gs://${DESTINATION_BUCKET_NAME}"
@@ -98,11 +98,12 @@ main() {
   # don't log spam unnecessarily.
   set -x
 
+  check_apis_enabled
+
   if [ -n "${SECRET_NAME}" ]; then
     add_secret_name_accessor_permission
   fi
 
-  check_apis_enabled
   upload_config
   deploy_notifier
   SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" \
@@ -124,6 +125,9 @@ fail() {
 }
 
 check_apis_enabled() {
+  if [ -n "${SECRET_NAME}" ]; then
+    REQUIRED_SERVICES+=('Secret Manager API')
+  fi
   SERVICES=$(gcloud services list --enabled --format='value(config.title)')
   for API in "${REQUIRED_SERVICES[@]}"; do
     [ -z ${SERVICES[@]/*${API}*/} ] || fail "please enable the ${API}"
