@@ -100,6 +100,7 @@ main() {
 
   if [ -n "${SECRET_NAME}" ]; then
     add_secret_name_accessor_permission
+    REQUIRED_SERVICES += ('Secret Manager API')
   fi
 
   check_apis_enabled
