@@ -83,7 +83,7 @@ main() {
     --format="value(projectNumber)") ||
     fail "could not get project number"
 
-  REQUIRED_SERVICES=('Cloud Build API' 'Cloud Run Admin API' 'Cloud Pub/Sub API' 'Secret Manager API')
+  REQUIRED_SERVICES=('Cloud Build API' 'Cloud Run Admin API' 'Cloud Pub/Sub API')
   SOURCE_CONFIG_BASENAME=$(basename "${SOURCE_CONFIG_PATH}")
   DESTINATION_BUCKET_NAME="${PROJECT_ID}-notifiers-config"
   DESTINATION_BUCKET_URI="gs://${DESTINATION_BUCKET_NAME}"
