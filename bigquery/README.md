@@ -13,7 +13,7 @@ see [Configuring BigQuery notifications](TODO).
 
 This notifier expects the following fields in the `delivery` map to be set:
 
-- `table`: Full path for the BigQuery table to which build data writes will be sent. 
+- `table`: Full path for the BigQuery table to which build data writes will be sent: 'projects/${project_id}/datasets/${dataset_name}/tables/${table_name}'
 
 ## Accessing build insights with SQL queries through the BigQuery CLI:
 
