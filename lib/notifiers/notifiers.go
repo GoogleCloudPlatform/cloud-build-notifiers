@@ -450,7 +450,7 @@ const (
 	// EmailMedium is for Build log URLs that are sent via email.
 	EmailMedium UTMMedium = "email"
 	// StorageMedium is for Build log URLS that are sent to a storage medium (i.e. BigQuery).
-	StorageMedium UTMMedium = "storage"
+	StorageMedium = "storage"
 	// ChatMedium is for Build log URLs that are sent over chat applications.
 	ChatMedium = "chat"
 	// HTTPMedium is for Build log URLs that are sent over HTTP(S) communication (that does not belong to one of the other mediums).
