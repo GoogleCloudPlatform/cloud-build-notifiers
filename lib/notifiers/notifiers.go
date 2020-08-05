@@ -449,6 +449,8 @@ type UTMMedium string
 const (
 	// EmailMedium is for Build log URLs that are sent via email.
 	EmailMedium UTMMedium = "email"
+	// StorageMedium is for Build log URLS that are sent to a storage medium (i.e. BigQuery).
+	StorageMedium UTMMedium = "storage"
 	// ChatMedium is for Build log URLs that are sent over chat applications.
 	ChatMedium = "chat"
 	// HTTPMedium is for Build log URLs that are sent over HTTP(S) communication (that does not belong to one of the other mediums).
@@ -473,7 +475,7 @@ func AddUTMParams(logURL string, medium UTMMedium) (string, error) {
 
 	var m string
 	switch medium {
-	case EmailMedium, ChatMedium, HTTPMedium, OtherMedium:
+	case EmailMedium, StorageMedium, ChatMedium, HTTPMedium, OtherMedium:
 		m = string(medium)
 	default:
 		return "", fmt.Errorf("unknown UTM medium: %q", medium)

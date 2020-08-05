@@ -245,7 +245,7 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 		}
 		buildSteps = append(buildSteps, newStep)
 	}
-	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.OtherMedium)
+	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.StorageMedium)
 	if err != nil {
 		return fmt.Errorf("Error generating UTM params: %v", err)
 	}
