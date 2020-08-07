@@ -295,7 +295,7 @@ func (bq *actualBQ) EnsureTable(ctx context.Context, tableName string) error {
 			return fmt.Errorf("Failed to initialize table %v: ", err)
 		}
 	} else {
-		if !len(metadata.Schema){
+		if len(metadata.Schema) == 0 {
 			log.Warningf("No schema found for table, writing new schema for table: %v", tableName)
 			update := bigquery.TableMetadataToUpdate{
 				Schema: schema,
