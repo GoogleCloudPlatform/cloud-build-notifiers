@@ -6,7 +6,7 @@ This notifier pushes build data to a BigQuery instance.
 
 ## Dataset and table setup
 
-The BQ notifier handles initializing datasets and tables automatically.
+The BQ notifier initializes datasets and tables automatically.
 Dataset identifiers in `bigquery.yaml` can refer to already existing or nonexistent datasets. 
 
 Table identifiers in `bigquery.yaml` file can refer to either:
