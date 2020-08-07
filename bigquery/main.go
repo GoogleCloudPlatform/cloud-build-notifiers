@@ -270,7 +270,7 @@ func (bq *actualBQ) EnsureDataset(ctx context.Context, datasetName string) error
 	bq.dataset = bq.client.Dataset(datasetName)
 	_, err := bq.client.Dataset(datasetName).Metadata(ctx)
 	if err != nil {
-		log.Warningf("error obtaining dataset metadata: %v\nCreating new BigQuery dataset: %q", err, datasetName)
+		log.Warningf("error obtaining dataset metadata: %v;Creating new BigQuery dataset: %q", err, datasetName)
 		if err := bq.dataset.Create(ctx, &bigquery.DatasetMetadata{
 			Name: datasetName, Description: "BigQuery Notifier Build Data",
 		}); err != nil {
