@@ -8,6 +8,7 @@ This notifier pushes build data to a BigQuery instance.
 
 The BQ notifier handles initializing datasets and tables automatically.
 Dataset identifiers in `bigquery.yaml` can refer to already existing or nonexistent datasets. 
+
 Table identifiers in `bigquery.yaml` file can refer to either:
 1. A nonexistent table (will be created upon deployment of the notifier)
 2. An empty table not yet initialized with a schema.
@@ -23,6 +24,8 @@ To access BQ data through queries, run the following command below.
 ```bash
 $ bq query '<SQL QUERY>'
 ```
+Adding the `--format=prettyjson` flag allows for more readable output.
+
 More detailed information can be found here: [BQ CLI Reference](https://cloud.google.com/bigquery/docs/bq-command-line-tool)
 
 Legacy SQL dialect is set on default for the BigQuery CLI and must be disabled for the example queries to work.
