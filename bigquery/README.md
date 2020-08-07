@@ -12,7 +12,7 @@ Dataset identifiers in the BigQuery Notifier config can refer to already existin
 Table identifiers in the BigQuery Notifier config can refer to either:
 1. A nonexistent table (will be created upon deployment of the notifier)
 2. An empty table not yet initialized with a schema.
-3. A table with a schema that matches the bq notifier schema specifications.
+3. An existing table with a schema that matches the bq notifier schema specifications.
 
 References to already existing tables with differing schemas will throw errors upon writing.
 
