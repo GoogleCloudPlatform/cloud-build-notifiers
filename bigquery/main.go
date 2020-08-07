@@ -270,8 +270,7 @@ func (bq *actualBQ) EnsureDataset(ctx context.Context, datasetName string) error
 	bq.dataset = bq.client.Dataset(datasetName)
 	_, err := bq.client.Dataset(datasetName).Metadata(ctx)
 	if err != nil {
-		log.Warningf("error obtaining dataset metadata: %v", err)
-		log.Warningf("Creating new BigQuery dataset: %v", datasetName)
+		log.Warningf("error obtaining dataset metadata: %v\nCreating new BigQuery dataset: %v", err, datasetName)
 		if err := bq.dataset.Create(ctx, &bigquery.DatasetMetadata{
 			Name: datasetName, Description: "BigQuery Notifier Build Data",
 		}); err != nil {
@@ -290,15 +289,14 @@ func (bq *actualBQ) EnsureTable(ctx context.Context, tableName string) error {
 	}
 	metadata, err := bq.dataset.Table(tableName).Metadata(ctx)
 	if err != nil {
-		log.Warningf("Error obtaining table metadata: %v", err)
-		log.Warningf("Creating new BigQuery table: %v", tableName)
+		log.Warningf("Error obtaining table metadata: %v\nCreating new BigQuery table: %v", err, tableName)
 		// Create table if it does not exist.
 		if err := bq.table.Create(ctx, &bigquery.TableMetadata{Name: tableName, Description: "BigQuery Notifier Build Data Table", Schema: schema}); err != nil {
 			return fmt.Errorf("Failed to initialize table %v: ", err)
 		}
 	} else {
-		if (metadata.Schema == nil) || len(metadata.Schema) == 0 {
-			log.Warning("No schema found for table, writing new schema.")
+		if !len(metadata.Schema){
+			log.Warningf("No schema found for table, writing new schema for table: %v", tableName)
 			update := bigquery.TableMetadataToUpdate{
 				Schema: schema,
 			}
