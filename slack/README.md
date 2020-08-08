@@ -16,3 +16,7 @@ This notifier expects the following fields in the `delivery` map to be set:
 
 - `webhook_url`: The `secretRef: <Slack-webhook-URL>` map that references the
 Slack webhook URL resource path in the `secrets` section.
+
+- (optionally) `template`: Allows to define a custom message sent to slack.
+See go text/template for syntax, the data passed is the [Build](https://godoc.org/google.golang.org/genproto/googleapis/devtools/cloudbuild/v1#Build)
+resource.

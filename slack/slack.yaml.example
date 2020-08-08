@@ -20,6 +20,7 @@ spec:
   notification:
     filter: build.status == Build.Status.SUCCESS
     delivery:
+      template: "Cloud Build ({{ .ProjectId }}, {{ .Id }}): {{ .Status }}"
       webhookUrl:
         secretRef: webhook-url
   secrets:
