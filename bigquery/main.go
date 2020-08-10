@@ -205,8 +205,13 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 		return nil
 	}
 	buildImages := []*buildImage{}
+	shaSet := make(map[string]bool)
 	for _, image := range build.GetImages() {
 		buildImage, err := imageManifestToBuildImage(image)
+		if shaSet[buildImage.SHA] {
+			continue
+		}
+		shaSet[buildImage.SHA] = true
 		if err != nil {
 			return fmt.Errorf("error parsing image manifest: %v", err)
 		}
