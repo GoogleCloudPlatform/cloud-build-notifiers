@@ -74,6 +74,7 @@ type bqRow struct {
 	Tags           []string
 	Env            []string
 	LogURL         string
+	Substitutions  [][]string
 }
 
 type buildImage struct {
@@ -249,6 +250,10 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 	if err != nil {
 		return fmt.Errorf("Error generating UTM params: %v", err)
 	}
+	substitutions := [][]string{}
+	for key, value := range build.Substitutions {
+		substitutions = append(substitutions, []string{key, value})
+	}
 	newRow := &bqRow{
 		ProjectID:      build.ProjectId,
 		ID:             build.Id,
@@ -262,6 +267,7 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 		Tags:           build.Tags,
 		Env:            build.Options.Env,
 		LogURL:         logURL,
+		Substitutions:  substitutions,
 	}
 	return n.client.WriteRow(ctx, newRow)
 }
