@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -70,17 +71,17 @@ func (bqf *mockBQFactory) Make(ctx context.Context) (bq, error) {
 }
 
 var fakeBQServerDS = map[string]fakeDMResponse{
-	"dne":     {&bigquery.DatasetMetadata{}, &googleapi.Error{Code: 404, Message: "not found"}},
-	"noauth":  {&bigquery.DatasetMetadata{}, &googleapi.Error{Code: 403, Message: "no authorization"}},
-	"broke":   {&bigquery.DatasetMetadata{}, &googleapi.Error{Code: 500, Message: "bq server error"}},
-	"strange": {&bigquery.DatasetMetadata{}, &googleapi.Error{Code: 305, Message: "use proxy"}},
+	"dne":     {&bigquery.DatasetMetadata{}, &googleapi.Error{Code: http.StatusNotFound, Message: "not found"}},
+	"noauth":  {&bigquery.DatasetMetadata{}, &googleapi.Error{Code: http.StatusForbidden, Message: "no authorization"}},
+	"broke":   {&bigquery.DatasetMetadata{}, &googleapi.Error{Code: http.StatusInternalServerError, Message: "bq server error"}},
+	"strange": {&bigquery.DatasetMetadata{}, &googleapi.Error{Code: http.StatusProxyAuthRequired, Message: "use proxy"}},
 }
 
 var fakeBQServerTable = map[string]fakeTMResponse{
-	"dne":            {&bigquery.TableMetadata{}, &googleapi.Error{Code: 404, Message: "not found"}},
-	"noauth":         {&bigquery.TableMetadata{}, &googleapi.Error{Code: 403, Message: "no authorization"}},
-	"broke":          {&bigquery.TableMetadata{}, &googleapi.Error{Code: 500, Message: "bq server error"}},
-	"strange":        {&bigquery.TableMetadata{}, &googleapi.Error{Code: 305, Message: "use proxy"}},
+	"dne":            {&bigquery.TableMetadata{}, &googleapi.Error{Code: http.StatusNotFound, Message: "not found"}},
+	"noauth":         {&bigquery.TableMetadata{}, &googleapi.Error{Code: http.StatusForbidden, Message: "no authorization"}},
+	"broke":          {&bigquery.TableMetadata{}, &googleapi.Error{Code: http.StatusInternalServerError, Message: "bq server error"}},
+	"strange":        {&bigquery.TableMetadata{}, &googleapi.Error{Code: http.StatusProxyAuthRequired, Message: "use proxy"}},
 	"notinitialized": {&bigquery.TableMetadata{Name: "name"}, nil},
 	"empty":          {&bigquery.TableMetadata{Schema: bigquery.Schema{}}, nil},
 	"notempty":       {&bigquery.TableMetadata{Schema: bigquery.Schema{&bigquery.FieldSchema{Name: "field"}}}, nil},
@@ -257,6 +258,7 @@ func TestSetUp(t *testing.T) {
 }
 
 func TestEnsureFunctions(t *testing.T) {
+	const tableURI = "projects/project_name/datasets/dataset_name/tables/valid"
 
 	for _, tc := range []struct {
 		name    string
@@ -269,7 +271,7 @@ func TestEnsureFunctions(t *testing.T) {
 				Notification: &notifiers.Notification{
 					Filter: `build.build_trigger_id == "123e4567-e89b-12d3-a456-426614174000" `,
 					Delivery: map[string]interface{}{
-						"table": "projects/project_name/datasets/dataset_name/tables/valid",
+						"table": tableURI,
 					},
 				},
 			},
@@ -385,6 +387,7 @@ func TestEnsureFunctions(t *testing.T) {
 }
 
 func TestSendNotification(t *testing.T) {
+	const tableURI = "projects/project_name/datasets/dataset_name/tables/valid"
 
 	for _, tc := range []struct {
 		name    string
@@ -398,7 +401,7 @@ func TestSendNotification(t *testing.T) {
 				Notification: &notifiers.Notification{
 					Filter: `build.build_trigger_id == "1234" `,
 					Delivery: map[string]interface{}{
-						"table": "projects/project_name/datasets/dataset_name/tables/valid",
+						"table": tableURI,
 					},
 				},
 			},
@@ -415,7 +418,7 @@ func TestSendNotification(t *testing.T) {
 				Notification: &notifiers.Notification{
 					Filter: `build.build_trigger_id == "1234" `,
 					Delivery: map[string]interface{}{
-						"table": "projects/project_name/datasets/dataset_name/tables/valid",
+						"table": tableURI,
 					},
 				},
 			},
@@ -434,7 +437,7 @@ func TestSendNotification(t *testing.T) {
 				Notification: &notifiers.Notification{
 					Filter: `build.build_trigger_id == "1234" `,
 					Delivery: map[string]interface{}{
-						"table": "projects/project_name/datasets/dataset_name/tables/valid",
+						"table": tableURI,
 					},
 				},
 			},
@@ -458,7 +461,7 @@ func TestSendNotification(t *testing.T) {
 				Notification: &notifiers.Notification{
 					Filter: `build.build_trigger_id == "1234" `,
 					Delivery: map[string]interface{}{
-						"table": "projects/project_name/datasets/dataset_name/tables/valid",
+						"table": tableURI,
 					},
 				},
 			},
@@ -519,7 +522,7 @@ func TestSendNotification(t *testing.T) {
 		},
 		wantErr: false,
 	}, {
-		name: "table exists with initialized schema",
+		name: "table exists with bad schema",
 		cfg: &notifiers.Config{
 			Spec: &notifiers.Spec{
 				Notification: &notifiers.Notification{
