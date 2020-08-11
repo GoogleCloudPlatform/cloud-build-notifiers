@@ -74,7 +74,7 @@ type bqRow struct {
 	Tags           []string
 	Env            []string
 	LogURL         string
-	Substitutions  []substitution
+	Substitutions  []*substitution
 }
 
 type substitution struct {
@@ -260,9 +260,9 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 	if err != nil {
 		return fmt.Errorf("Error generating UTM params: %v", err)
 	}
-	substitutions := []substitution{}
+	substitutions := []*substitution{}
 	for key, value := range build.Substitutions {
-		substitutions = append(substitutions, substitution{key, value})
+		substitutions = append(substitutions, &substitution{key, value})
 	}
 	newRow := &bqRow{
 		ProjectID:      build.ProjectId,
