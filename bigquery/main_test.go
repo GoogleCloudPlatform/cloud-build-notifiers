@@ -622,3 +622,9 @@ func TestGetImageSize(t *testing.T) {
 		})
 	}
 }
+
+func TestInferSchema(t *testing.T) {
+	if _, err := bigquery.InferSchema(bqRow{}); err != nil {
+		t.Errorf("Failed to infer schema: %v", err)
+	}
+}
