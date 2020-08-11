@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -70,6 +71,8 @@ func (bqf *mockBQFactory) Make(ctx context.Context) (bq, error) {
 	return &mockBQ{}, nil
 }
 
+const tableURI = "projects/project_name/datasets/dataset_name/tables/valid"
+
 var fakeBQServerDS = map[string]fakeDMResponse{
 	"dne":     {&bigquery.DatasetMetadata{}, &googleapi.Error{Code: http.StatusNotFound, Message: "not found"}},
 	"noauth":  {&bigquery.DatasetMetadata{}, &googleapi.Error{Code: http.StatusForbidden, Message: "no authorization"}},
@@ -98,7 +101,7 @@ type fakeTMResponse struct {
 }
 
 func (bq *mockBQ) EnsureDataset(ctx context.Context, datasetName string) error {
-	fakeResponse, _ := fakeBQServerDS[datasetName]
+	fakeResponse := fakeBQServerDS[datasetName]
 	err := fakeResponse.fakeError
 	if err != nil {
 		log.Warningf("Error obtaining dataset metadata: %v", err)
@@ -117,13 +120,13 @@ func (bq *mockBQ) EnsureDataset(ctx context.Context, datasetName string) error {
 }
 
 func (bq *mockBQ) EnsureTable(ctx context.Context, tableName string) error {
-	fakeResponse, _ := fakeBQServerTable[tableName]
-	err := fakeResponse.fakeError
-	bq.validSchema = false
 	if tableName == "valid" {
 		bq.validSchema = true
 		return nil
 	}
+	bq.validSchema = false
+	fakeResponse := fakeBQServerTable[tableName]
+	err := fakeResponse.fakeError
 	if err != nil {
 		log.Warningf("Error obtaining table metadata: %v", err)
 		if strings.Contains(err.Error(), "404") {
@@ -146,16 +149,15 @@ func (bq *mockBQ) EnsureTable(ctx context.Context, tableName string) error {
 
 func (bq *mockBQ) WriteRow(ctx context.Context, row *bqRow) error {
 	if !bq.validSchema {
-		return fmt.Errorf("Error writing to table, invalid schema")
+		return errors.New("Error writing to table, invalid schema")
 	}
 	if row == nil {
-		return fmt.Errorf("cannot insert empty row")
+		return errors.New("cannot insert empty row")
 	}
 	return nil
 }
 
 func TestSetUp(t *testing.T) {
-	const tableURI = "projects/project_name/datasets/dataset_name/tables/valid"
 
 	for _, tc := range []struct {
 		name    string
