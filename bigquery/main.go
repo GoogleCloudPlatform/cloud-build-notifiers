@@ -108,7 +108,7 @@ func (bqf *actualBQFactory) Make(ctx context.Context) (bq, error) {
 	}
 	bqClient, err := bigquery.NewClient(ctx, projectID)
 	if err != nil {
-		return nil, fmt.Errorf("error intializing bigquery client: %v", err)
+		return nil, fmt.Errorf("error initializing bigquery client: %v", err)
 	}
 	newClient := &actualBQ{client: bqClient}
 	return newClient, nil
@@ -192,7 +192,7 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 		return nil
 	}
 	if build.BuildTriggerId == "" {
-		log.Warningf("build passes filter but does not have trigger ID, no build data will be captured: %v, status: %v", n.filter, build.GetStatus())
+		log.Warningf("build passes filter but does not have a trigger ID. Build id: %q, status: %v", build.Id, build.GetStatus())
 	}
 	log.Infof("sending Big Query write for build %q (status: %q)", build.Id, build.Status)
 	if build.ProjectId == "" {
@@ -281,7 +281,7 @@ func (bq *actualBQ) EnsureDataset(ctx context.Context, datasetName string) error
 	bq.dataset = bq.client.Dataset(datasetName)
 	_, err := bq.client.Dataset(datasetName).Metadata(ctx)
 	if err != nil {
-		log.Warningf("error obtaining dataset metadata: %v", err)
+		log.Warningf("error obtaining dataset metadata: %v;Creating new BigQuery dataset: %q", err, datasetName)
 		if err := bq.dataset.Create(ctx, &bigquery.DatasetMetadata{
 			Name: datasetName, Description: "BigQuery Notifier Build Data",
 		}); err != nil {
@@ -294,18 +294,27 @@ func (bq *actualBQ) EnsureDataset(ctx context.Context, datasetName string) error
 func (bq *actualBQ) EnsureTable(ctx context.Context, tableName string) error {
 	// Check for existence of table, create if false
 	bq.table = bq.dataset.Table(tableName)
-	_, err := bq.dataset.Table(tableName).Metadata(ctx)
+	schema, err := bigquery.InferSchema(bqRow{})
 	if err != nil {
-		log.Warningf("Error obtaining table metadata: %v", err)
-		schema, err := bigquery.InferSchema(bqRow{})
-		if err != nil {
-			return fmt.Errorf("Failed to infer schema: %v", err)
-		}
+		return fmt.Errorf("Failed to infer schema: %v", err)
+	}
+	metadata, err := bq.dataset.Table(tableName).Metadata(ctx)
+	if err != nil {
+		log.Warningf("Error obtaining table metadata: %q;Creating new BigQuery table: %q", err, tableName)
 		// Create table if it does not exist.
 		if err := bq.table.Create(ctx, &bigquery.TableMetadata{Name: tableName, Description: "BigQuery Notifier Build Data Table", Schema: schema}); err != nil {
 			return fmt.Errorf("Failed to initialize table %v: ", err)
 		}
+	} else if len(metadata.Schema) == 0 {
+		log.Warningf("No schema found for table, writing new schema for table: %v", tableName)
+		update := bigquery.TableMetadataToUpdate{
+			Schema: schema,
+		}
+		if _, err := bq.table.Update(ctx, update, metadata.ETag); err != nil {
+			return fmt.Errorf("Error: unable to update schema of table: %v", err)
+		}
 	}
+
 	return nil
 }
 
