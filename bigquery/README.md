@@ -7,7 +7,7 @@ This notifier pushes build data to a BigQuery instance.
 ## Dataset and table setup
 
 The BQ notifier initializes datasets and tables automatically.
-Dataset identifiers in the BigQuery Notifier config can refer to already existing or nonexistent datasets. 
+Dataset identifiers in the BigQuery Notifier config can refer to existing or nonexistent datasets. 
 
 Table identifiers in the BigQuery Notifier config can refer to either:
 1. A nonexistent table (will be created upon deployment of the notifier)
