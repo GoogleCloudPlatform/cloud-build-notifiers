@@ -411,6 +411,7 @@ func TestSendNotification(t *testing.T) {
 		build: &cbpb.Build{
 			BuildTriggerId: "1234",
 			Id:             "1",
+			Status:         3,
 		},
 		wantErr: true,
 	}, {
@@ -431,7 +432,7 @@ func TestSendNotification(t *testing.T) {
 			BuildTriggerId: "1234",
 			Status:         0,
 		},
-		wantErr: true,
+		wantErr: false,
 	}, {
 		name: "successful build",
 		cfg: &notifiers.Config{
