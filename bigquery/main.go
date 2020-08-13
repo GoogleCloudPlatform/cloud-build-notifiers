@@ -210,7 +210,6 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 	if build.Status == cbpb.Build_STATUS_UNKNOWN {
 		return fmt.Errorf("build has status: %v", build.Status.String())
 	}
-
 	buildImages := []*buildImage{}
 	shaSet := make(map[string]bool)
 	for _, image := range build.GetImages() {
