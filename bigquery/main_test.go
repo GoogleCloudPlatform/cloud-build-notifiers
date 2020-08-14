@@ -62,18 +62,15 @@ func (ml *fakeLayer) MediaType() (types.MediaType, error) {
 
 type fakeBQ struct {
 	validSchema bool
-	WrittenRows []*bqRow
+	writtenRows []*bqRow
 }
 
 type fakeBQFactory struct {
-	MaybeFake *fakeBQ
+	fake *fakeBQ
 }
 
 func (bqf *fakeBQFactory) Make(ctx context.Context) (bq, error) {
-	if bqf.MaybeFake != nil {
-		return bqf.MaybeFake, nil
-	}
-	return &fakeBQ{}, nil
+	return bqf.fake, nil
 }
 
 const tableURI = "projects/project_name/datasets/dataset_name/tables/valid"
@@ -148,7 +145,6 @@ func (bq *fakeBQ) EnsureTable(ctx context.Context, tableName string) error {
 	if len(fakeResponse.table.Schema) == 0 {
 		bq.validSchema = true
 	}
-	bq.WrittenRows = []*bqRow{}
 	return nil
 }
 
@@ -159,7 +155,7 @@ func (bq *fakeBQ) WriteRow(ctx context.Context, row *bqRow) error {
 	if row == nil {
 		return errors.New("cannot insert empty row")
 	}
-	bq.WrittenRows = append(bq.WrittenRows, row)
+	bq.writtenRows = append(bq.writtenRows, row)
 	return nil
 }
 
@@ -247,7 +243,7 @@ func TestSetUp(t *testing.T) {
 		wantErr: true,
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			n := &bqNotifier{bqf: &fakeBQFactory{}}
+			n := &bqNotifier{bqf: &fakeBQFactory{&fakeBQ{}}}
 			err := n.SetUp(context.Background(), tc.cfg, nil)
 			if err != nil {
 				if tc.wantErr {
@@ -376,7 +372,7 @@ func TestEnsureFunctions(t *testing.T) {
 			wantErr: true,
 		}} {
 		t.Run(tc.name, func(t *testing.T) {
-			n := &bqNotifier{bqf: &fakeBQFactory{}}
+			n := &bqNotifier{bqf: &fakeBQFactory{&fakeBQ{}}}
 			err := n.SetUp(context.Background(), tc.cfg, nil)
 			if err != nil {
 				if tc.wantErr {
@@ -581,10 +577,10 @@ func TestSendNotification(t *testing.T) {
 			if tc.wantErr {
 				t.Error("unexpected success")
 			}
-			if !tc.wantRow && len(fakeBQ.WrittenRows) != 0 {
-				t.Error("unexpected write")
+			if !tc.wantRow && len(fakeBQ.writtenRows) != 0 {
+				t.Errorf("unexpected write: %v", fakeBQ.writtenRows)
 			}
-			if tc.wantRow && len(fakeBQ.WrittenRows) == 0 {
+			if tc.wantRow && len(fakeBQ.writtenRows) == 0 {
 				t.Error("expected write")
 			}
 		})
