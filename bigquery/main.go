@@ -199,16 +199,13 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 	if build.BuildTriggerId == "" {
 		log.Warningf("build passes filter but does not have a trigger ID. Build id: %q, status: %v", build.Id, build.GetStatus())
 	}
+	if !terminalStatusCodes[build.Status] {
+		log.Infof("not writing to BigQuery for non-terminal build status %v", build.Status.String())
+		return nil
+	}
 	log.Infof("sending Big Query write for build %q (status: %q)", build.Id, build.Status)
 	if build.ProjectId == "" {
 		return fmt.Errorf("build missing project id")
-	}
-	if build.Status == cbpb.Build_STATUS_UNKNOWN {
-		return fmt.Errorf("build has status: %v", build.Status.String())
-	}
-	if !terminalStatusCodes[build.Status] {
-		log.Infof("not writing non-terminal build step %v", build.Status.String())
-		return nil
 	}
 	buildImages := []*buildImage{}
 	shaSet := make(map[string]bool)

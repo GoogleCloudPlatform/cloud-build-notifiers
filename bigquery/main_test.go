@@ -60,15 +60,17 @@ func (ml *fakeLayer) MediaType() (types.MediaType, error) {
 	return "", nil
 }
 
-type mockBQ struct {
+type fakeBQ struct {
 	validSchema bool
+	writtenRows []*bqRow
 }
 
-type mockBQFactory struct {
+type fakeBQFactory struct {
+	fake *fakeBQ
 }
 
-func (bqf *mockBQFactory) Make(ctx context.Context) (bq, error) {
-	return &mockBQ{}, nil
+func (bqf *fakeBQFactory) Make(ctx context.Context) (bq, error) {
+	return bqf.fake, nil
 }
 
 const tableURI = "projects/project_name/datasets/dataset_name/tables/valid"
@@ -100,7 +102,7 @@ type fakeTMResponse struct {
 	fakeError error
 }
 
-func (bq *mockBQ) EnsureDataset(ctx context.Context, datasetName string) error {
+func (bq *fakeBQ) EnsureDataset(ctx context.Context, datasetName string) error {
 	fakeResponse := fakeBQServerDS[datasetName]
 	err := fakeResponse.fakeError
 	if err != nil {
@@ -119,7 +121,7 @@ func (bq *mockBQ) EnsureDataset(ctx context.Context, datasetName string) error {
 	return nil
 }
 
-func (bq *mockBQ) EnsureTable(ctx context.Context, tableName string) error {
+func (bq *fakeBQ) EnsureTable(ctx context.Context, tableName string) error {
 	if tableName == "valid" {
 		bq.validSchema = true
 		return nil
@@ -142,18 +144,18 @@ func (bq *mockBQ) EnsureTable(ctx context.Context, tableName string) error {
 	}
 	if len(fakeResponse.table.Schema) == 0 {
 		bq.validSchema = true
-
 	}
 	return nil
 }
 
-func (bq *mockBQ) WriteRow(ctx context.Context, row *bqRow) error {
+func (bq *fakeBQ) WriteRow(ctx context.Context, row *bqRow) error {
 	if !bq.validSchema {
 		return errors.New("Error writing to table, invalid schema")
 	}
 	if row == nil {
 		return errors.New("cannot insert empty row")
 	}
+	bq.writtenRows = append(bq.writtenRows, row)
 	return nil
 }
 
@@ -241,7 +243,7 @@ func TestSetUp(t *testing.T) {
 		wantErr: true,
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			n := &bqNotifier{bqf: &mockBQFactory{}}
+			n := &bqNotifier{bqf: &fakeBQFactory{&fakeBQ{}}}
 			err := n.SetUp(context.Background(), tc.cfg, nil)
 			if err != nil {
 				if tc.wantErr {
@@ -370,7 +372,7 @@ func TestEnsureFunctions(t *testing.T) {
 			wantErr: true,
 		}} {
 		t.Run(tc.name, func(t *testing.T) {
-			n := &bqNotifier{bqf: &mockBQFactory{}}
+			n := &bqNotifier{bqf: &fakeBQFactory{&fakeBQ{}}}
 			err := n.SetUp(context.Background(), tc.cfg, nil)
 			if err != nil {
 				if tc.wantErr {
@@ -396,6 +398,7 @@ func TestSendNotification(t *testing.T) {
 		cfg     *notifiers.Config
 		build   *cbpb.Build
 		wantErr bool
+		wantRow bool
 	}{{
 		name: "missing IDs",
 		cfg: &notifiers.Config{
@@ -411,8 +414,10 @@ func TestSendNotification(t *testing.T) {
 		build: &cbpb.Build{
 			BuildTriggerId: "1234",
 			Id:             "1",
+			Status:         cbpb.Build_SUCCESS,
 		},
 		wantErr: true,
+		wantRow: false,
 	}, {
 		name: "unknown status",
 		cfg: &notifiers.Config{
@@ -429,9 +434,10 @@ func TestSendNotification(t *testing.T) {
 			ProjectId:      "Project ID",
 			Id:             "Build ID",
 			BuildTriggerId: "1234",
-			Status:         0,
+			Status:         cbpb.Build_STATUS_UNKNOWN,
 		},
-		wantErr: true,
+		wantErr: false,
+		wantRow: false,
 	}, {
 		name: "successful build",
 		cfg: &notifiers.Config{
@@ -448,7 +454,7 @@ func TestSendNotification(t *testing.T) {
 			ProjectId:      "Project ID",
 			Id:             "Build ID",
 			BuildTriggerId: "1234",
-			Status:         3,
+			Status:         cbpb.Build_SUCCESS,
 			CreateTime:     timestamppb.Now(),
 			StartTime:      timestamppb.Now(),
 			FinishTime:     timestamppb.Now(),
@@ -456,6 +462,7 @@ func TestSendNotification(t *testing.T) {
 			Options:        &cbpb.BuildOptions{Env: []string{}},
 		},
 		wantErr: false,
+		wantRow: true,
 	}, {
 		name: "no timestamp build",
 		cfg: &notifiers.Config{
@@ -472,9 +479,10 @@ func TestSendNotification(t *testing.T) {
 			ProjectId:      "Project ID",
 			Id:             "Build ID",
 			BuildTriggerId: "1234",
-			Status:         4,
+			Status:         cbpb.Build_FAILURE,
 		},
 		wantErr: true,
+		wantRow: false,
 	}, {
 		name: "table is empty",
 		cfg: &notifiers.Config{
@@ -491,7 +499,7 @@ func TestSendNotification(t *testing.T) {
 			ProjectId:      "Project ID",
 			Id:             "Build ID",
 			BuildTriggerId: "123e4567-e89b-12d3-a456-426614174000",
-			Status:         3,
+			Status:         cbpb.Build_SUCCESS,
 			CreateTime:     timestamppb.Now(),
 			StartTime:      timestamppb.Now(),
 			FinishTime:     timestamppb.Now(),
@@ -499,6 +507,7 @@ func TestSendNotification(t *testing.T) {
 			Options:        &cbpb.BuildOptions{Env: []string{}},
 		},
 		wantErr: false,
+		wantRow: true,
 	}, {
 		name: "schema not initialized",
 		cfg: &notifiers.Config{
@@ -515,7 +524,7 @@ func TestSendNotification(t *testing.T) {
 			ProjectId:      "Project ID",
 			Id:             "Build ID",
 			BuildTriggerId: "123e4567-e89b-12d3-a456-426614174000",
-			Status:         3,
+			Status:         cbpb.Build_SUCCESS,
 			CreateTime:     timestamppb.Now(),
 			StartTime:      timestamppb.Now(),
 			FinishTime:     timestamppb.Now(),
@@ -523,6 +532,7 @@ func TestSendNotification(t *testing.T) {
 			Options:        &cbpb.BuildOptions{Env: []string{}},
 		},
 		wantErr: false,
+		wantRow: true,
 	}, {
 		name: "table exists with bad schema",
 		cfg: &notifiers.Config{
@@ -539,7 +549,7 @@ func TestSendNotification(t *testing.T) {
 			ProjectId:      "Project ID",
 			Id:             "Build ID",
 			BuildTriggerId: "123e4567-e89b-12d3-a456-426614174000",
-			Status:         3,
+			Status:         cbpb.Build_SUCCESS,
 			CreateTime:     timestamppb.Now(),
 			StartTime:      timestamppb.Now(),
 			FinishTime:     timestamppb.Now(),
@@ -547,9 +557,11 @@ func TestSendNotification(t *testing.T) {
 			Options:        &cbpb.BuildOptions{Env: []string{}},
 		},
 		wantErr: true,
+		wantRow: false,
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			n := &bqNotifier{bqf: &mockBQFactory{}}
+			fakeBQ := &fakeBQ{}
+			n := &bqNotifier{bqf: &fakeBQFactory{fakeBQ}}
 			err := n.SetUp(context.Background(), tc.cfg, nil)
 			if err != nil {
 				t.Fatalf("Setup(%v) got unexpected error: %v", tc.cfg, err)
@@ -565,7 +577,12 @@ func TestSendNotification(t *testing.T) {
 			if tc.wantErr {
 				t.Error("unexpected success")
 			}
-
+			if !tc.wantRow && len(fakeBQ.writtenRows) != 0 {
+				t.Errorf("unexpected write: %v", fakeBQ.writtenRows)
+			}
+			if tc.wantRow && len(fakeBQ.writtenRows) == 0 {
+				t.Error("expected write")
+			}
 		})
 	}
 }
