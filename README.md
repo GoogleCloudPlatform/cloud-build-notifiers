@@ -17,13 +17,15 @@ Cloud Build user and to have the
 [gcloud CLI tool](https://cloud.google.com/sdk/gcloud/) installed and configured
 for your Cloud Build project(s).
 
-There are currently 3 supported notifier types:
+There are currently 4 supported notifier types:
 
 -   [`smtp`](./smtp/README.md), which sends emails via an SMTP server.
 -   [`http`](./http/README.md), which sends (HTTP `POST`s) a JSON payload to
     another HTTP endpoint.
 -   [`slack`](./slack/README.md), which uses a Slack webhook to post a message
     in a Slack channel.
+-   [`teams`](./teams/README.md), which uses a Microsoft Teams webhook to post a message
+    in a Teams channel.
 
 **See the official documentation on Google Cloud for how to configure each notifier:**
 

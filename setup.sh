@@ -24,6 +24,7 @@ the repo) are:
 * http
 * slack
 * smtp
+* teams
 
 Usage [in the cloud-build-notifiers repo root]:
 
@@ -57,7 +58,7 @@ main() {
   # Check that the user is using a supported notifier type in the correct
   # directory.
   case "${NOTIFIER_TYPE}" in
-  http | smtp | slack | bigquery) ;;
+  http | smtp | slack | bigquery | teams) ;;
   *) fail "${HELP}" ;;
   esac
 
