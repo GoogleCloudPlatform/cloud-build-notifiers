@@ -586,7 +586,7 @@ func TestNewReceiver(t *testing.T) {
 	bc := make(chan *cbpb.Build, 1)
 	fn := &fakeNotifier{notifs: bc}
 
-	handler := newReceiver(fn)
+	handler := newReceiver(fn, &receiverParams{})
 	req := httptest.NewRequest(http.MethodPost, "http://notifer.example.com/", bytes.NewBuffer(j))
 	w := httptest.NewRecorder()
 
@@ -607,7 +607,6 @@ func TestNewReceiver(t *testing.T) {
 	if diff := cmp.Diff(sentBuild, gotBuild); diff != "" {
 		t.Errorf("unexpected difference between published Build and received Build:\n%s", diff)
 	}
-
 }
 
 type errNotifier struct {
@@ -671,7 +670,7 @@ func TestNewReceiverError(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			handler := newReceiver(&errNotifier{tc.sendErr})
+			handler := newReceiver(&errNotifier{tc.sendErr}, &receiverParams{})
 
 			req := httptest.NewRequest(http.MethodPost, "http://notifer.example.com/", tc.body)
 			w := httptest.NewRecorder()
@@ -682,5 +681,40 @@ func TestNewReceiverError(t *testing.T) {
 				t.Errorf("result.StatusCode = %d, expected %d", s, tc.wantCode)
 			}
 		})
+	}
+}
+
+type fatalNotifier struct {
+	t *testing.T
+}
+
+func (n *fatalNotifier) SetUp(_ context.Context, _ *Config, _ SecretGetter) error {
+	return nil
+}
+func (n *fatalNotifier) SendNotification(_ context.Context, b *cbpb.Build) error {
+	n.t.Helper()
+	n.t.Fatalf("should not have been called; was called with build: %v", b)
+	return nil
+}
+
+func TestReceiverWithIgnoredBadMessage(t *testing.T) {
+	const projectID = "some-project-id"
+	pspw := &pubSubPushWrapper{
+		Message:      pubSubPushMessage{Data: []byte("#bA4Fx"), ID: "id-do-not-care"},
+		Subscription: "subscriber-do-not-care",
+	}
+
+	j, err := json.Marshal(pspw)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	handler := newReceiver(&fatalNotifier{t}, &receiverParams{ignoreBadMessages: true})
+	req := httptest.NewRequest(http.MethodPost, "http://notifer.example.com/", bytes.NewBuffer(j))
+	w := httptest.NewRecorder()
+
+	handler(w, req)
+	if s := w.Result().StatusCode; s != http.StatusOK {
+		t.Errorf("result.StatusCode = %d, expected %d", s, http.StatusOK)
 	}
 }

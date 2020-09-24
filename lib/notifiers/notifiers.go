@@ -98,8 +98,9 @@ type Secret struct {
 
 // Copied from https://cloud.google.com/run/docs/tutorials/pubsub#looking_at_the_code.
 type pubSubPushMessage struct {
-	Data []byte `json:"data,omitempty"`
-	ID   string `json:"id"`
+	Data        []byte `json:"data,omitempty"`
+	ID          string `json:"id"`
+	PublishTime string `json:"publishTime"`
 }
 
 type pubSubPushWrapper struct {
@@ -216,10 +217,12 @@ func Main(notifier Notifier) error {
 		return fmt.Errorf("failed to call SetUp on notifier: %w", err)
 	}
 
+	_, ignoreBadMessages := GetEnv("IGNORE_BAD_MESSAGES")
+
 	log.V(2).Infoln("starting HTTP server...")
 
 	// Our Pub/Sub push receiver.
-	http.HandleFunc("/", newReceiver(notifier))
+	http.HandleFunc("/", newReceiver(notifier, &receiverParams{ignoreBadMessages}))
 
 	// An auxilliary, healthz-style receiver.
 	// You can call this endpoint using the curl command here:
@@ -365,8 +368,12 @@ func GetEnv(name string) (string, bool) {
 	return val, val != ""
 }
 
+type receiverParams struct {
+	ignoreBadMessages bool
+}
+
 // newReceiver returns a Pub/Sub push HTTP receiving http.HandlerFunc that calls the given notifier.
-func newReceiver(notifier Notifier) http.HandlerFunc {
+func newReceiver(notifier Notifier, params *receiverParams) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		var pspw pubSubPushWrapper
@@ -394,7 +401,14 @@ func newReceiver(notifier Notifier) http.HandlerFunc {
 		}
 		bv2 := proto.MessageV2(build)
 		if err := uo.Unmarshal(pspw.Message.Data, bv2); err != nil {
-			log.Errorf("failed to unmarshal PubSub message %q into a Build: %v", pspw.Message.ID, err)
+			if params.ignoreBadMessages {
+				log.Warningf("not attempting to handle unmarshal-able Pub/Sub message id=%q data=%q publishTime=%q which gave error: %v",
+					pspw.Message.ID, string(pspw.Message.Data), pspw.Message.PublishTime, err)
+				return
+			}
+
+			log.Errorf("failed to unmarshal PubSub message id=%q data=%q publishTime=%q into a Build: %v",
+				pspw.Message.ID, string(pspw.Message.Data), pspw.Message.PublishTime, err)
 			http.Error(w, "Bad Cloud Build Pub/Sub data", http.StatusBadRequest)
 			return
 		}
