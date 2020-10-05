@@ -2,10 +2,12 @@ module github.com/GoogleCloudPlatform/cloud-build-notifiers/bigquery
 
 go 1.14
 
+replace github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers => ../lib/notifiers
+
 require (
 	cloud.google.com/go v0.63.0
 	cloud.google.com/go/bigquery v1.10.0
-	github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers v0.0.0-20200811211040-95eaa6207bf9
+	github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers v0.0.0-00010101000000-000000000000
 	github.com/antlr/antlr4 v0.0.0-20200801005519-2ba38605b949 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/protobuf v1.4.2
