@@ -361,7 +361,7 @@ func MakeCELPredicate(filter string) (*CELPredicate, error) {
 func GetEnv(name string) (string, bool) {
 	val := os.Getenv(name)
 	if val == "" {
-		log.Warningf("env var %q is empty", name)
+		log.V(2).Infof("env var %q is empty", name)
 	} else {
 		log.V(2).Infof("env var %q is %q", name, val)
 	}
