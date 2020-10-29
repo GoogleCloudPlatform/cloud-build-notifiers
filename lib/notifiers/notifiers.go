@@ -81,8 +81,9 @@ type Spec struct {
 
 // Notification is the data container for the fields that are relevant to the configuration of sending the notification.
 type Notification struct {
-	Filter   string                 `yaml:"filter"`
-	Delivery map[string]interface{} `yaml:"delivery"`
+	Filter        string                 `yaml:"filter"`
+	Delivery      map[string]interface{} `yaml:"delivery"`
+	Substitutions map[string]string      `yaml:"substitutions"`
 }
 
 // SecretConfig is the data container used in a Spec.Notification config for referencing a secret in the Spec.Secrets list.
@@ -322,6 +323,21 @@ func validateConfig(cfg *Config) error {
 		return fmt.Errorf("expected `apiVersion` %q to be one of the following:\n%v",
 			cfg.APIVersion, allowedYAMLAPIVersions)
 	}
+
+	if cfg.Spec == nil {
+		return errors.New("expected config.spec to be present")
+	}
+
+	if cfg.Spec.Notification == nil {
+		return errors.New("expected config.spec.notification to be present")
+	}
+
+	for subName := range cfg.Spec.Notification.Substitutions {
+		if !strings.HasPrefix(subName, "_") {
+			return fmt.Errorf("expected user-defined substitution %q to start with '_'", subName)
+		}
+	}
+
 	return nil
 }
 
