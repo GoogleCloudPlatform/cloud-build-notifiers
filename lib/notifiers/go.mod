@@ -8,6 +8,8 @@ require (
 	cloud.google.com/go/storage v1.5.0
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/protobuf v1.4.3
+	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e
+	github.com/golang/protobuf v1.4.0
 	github.com/google/cel-go v0.4.1
 	github.com/google/go-cmp v0.5.0
 	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
@@ -16,4 +18,5 @@ require (
 	google.golang.org/grpc v1.28.1 // indirect
 	google.golang.org/protobuf v1.25.0
 	gopkg.in/yaml.v2 v2.2.8
+	k8s.io/client-go v11.0.0+incompatible
 )

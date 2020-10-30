@@ -111,7 +111,7 @@ type pubSubPushWrapper struct {
 
 // Notifier is the interface type that users should implement for usage in Cloud Build notifiers.
 type Notifier interface {
-	SetUp(context.Context, *Config, SecretGetter) error
+	SetUp(context.Context, *Config, SecretGetter, BindingResolver) error
 	SendNotification(context.Context, *cbpb.Build) error
 }
 
@@ -180,7 +180,12 @@ func Main(notifier Notifier) error {
 			return fmt.Errorf("failed to validate config during setup check: %w", err)
 		}
 
-		if err := notifier.SetUp(ctx, cfg, new(setupCheckSecretGetter)); err != nil {
+		br, err := newResolver(cfg)
+		if err != nil {
+			return fmt.Errorf("failed to create BindingResolver during setup check: %w", err)
+		}
+
+		if err := notifier.SetUp(ctx, cfg, new(setupCheckSecretGetter), br); err != nil {
 			return fmt.Errorf("failed to run notifier.SetUp during setup check: %w", err)
 		}
 
@@ -214,7 +219,14 @@ func Main(notifier Notifier) error {
 	}
 	log.V(2).Infof("got config from GCS (%q): %+v\n", cfgPath, cfg)
 
-	if err := notifier.SetUp(ctx, cfg, &actualSecretManager{smc}); err != nil {
+	sm := &actualSecretManager{client: smc}
+
+	br, err := newResolver(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to construct a binding resolver: %v", err)
+	}
+
+	if err := notifier.SetUp(ctx, cfg, sm, br); err != nil {
 		return fmt.Errorf("failed to call SetUp on notifier: %w", err)
 	}
 
@@ -260,6 +272,7 @@ func (a *actualGCSReaderFactory) NewReader(ctx context.Context, bucket, object s
 
 type actualSecretManager struct {
 	client *secretmanager.Client
+	// TODO(ljr): Do we want any sort of timed cache here?
 }
 
 func (a *actualSecretManager) GetSecret(ctx context.Context, name string) (string, error) {
@@ -318,6 +331,7 @@ func decodeConfig(r io.Reader) (*Config, error) {
 
 // validateConfig checks the following (or errors):
 // - apiVersion is one of allowedYAMLAPIVersions.
+// - user substitution names match the subNamePattern regexp.
 func validateConfig(cfg *Config) error {
 	if allowed := allowedYAMLAPIVersions[cfg.APIVersion]; !allowed {
 		return fmt.Errorf("expected `apiVersion` %q to be one of the following:\n%v",
@@ -332,9 +346,9 @@ func validateConfig(cfg *Config) error {
 		return errors.New("expected config.spec.notification to be present")
 	}
 
-	for subName := range cfg.Spec.Notification.Substitutions {
-		if !strings.HasPrefix(subName, "_") {
-			return fmt.Errorf("expected user-defined substitution %q to start with '_'", subName)
+	for n := range cfg.Spec.Notification.Substitutions {
+		if !subNamePattern.MatchString(n) {
+			return fmt.Errorf("expected user-defined substitution %q to match pattern %v", n, subNamePattern)
 		}
 	}
 
