@@ -234,7 +234,9 @@ func (f *fakeGCSReaderFactory) NewReader(_ context.Context, bucket, object strin
 	return ioutil.NopCloser(bytes.NewBufferString(s)), nil
 }
 
-const validConfigYAML = `
+// It's annoying to update this config since YAML requires spaces but Go likes tabs.
+// Just keep everything at tabs and then replace accordingly.
+const validConfigYAMLWithTabs = `
 apiVersion: cloud-build-notifiers/v1
 kind: TestNotifier
 metadata:
@@ -245,8 +247,11 @@ spec:
     delivery:
       some_key: some_value
       other_key: [404, 505]
-      third_key:
-        foo: bar
+	  third_key:
+		foo: bar
+    substitutions:
+      _SOME_SUBST: $(build['_SOME_SUBST'])
+      _SOME_SECRET: $(secrets['some-secret'])
   secrets:
     - name: some-secret
       value: projects/my-project/secrets/my-secret/versions/latest
@@ -266,6 +271,10 @@ var validConfig = &Config{
 				"other_key": []interface{}{int(404), int(505)},
 				"third_key": map[interface{}]interface{}{string("foo"): string("bar")},
 			},
+			Substitutions: map[string]string{
+				"_SOME_SUBST":  "$(build['_SOME_SUBST'])",
+				"_SOME_SECRET": "$(secrets['some-secret'])",
+			},
 		},
 		Secrets: []*Secret{{
 			LocalName:    "some-secret",
@@ -274,13 +283,14 @@ var validConfig = &Config{
 	},
 }
 
-var validFakeFactory = &fakeGCSReaderFactory{
-	data: map[string]string{
-		"gs://path/to/my/config.yaml": validConfigYAML,
-	},
-}
-
 func TestGetGCSConfig(t *testing.T) {
+	validYAML := strings.ReplaceAll(validConfigYAMLWithTabs, "\t", "    " /* 4 spaces */)
+	validFakeFactory := &fakeGCSReaderFactory{
+		data: map[string]string{
+			"gs://path/to/my/config.yaml": validYAML,
+		},
+	}
+
 	for _, tc := range []struct {
 		name       string
 		path       string
@@ -503,14 +513,6 @@ func TestAddUTMParamsErrors(t *testing.T) {
 }
 
 func TestValidateConfig(t *testing.T) {
-	// Config setup.
-	var badAPIVersion Config
-	badAPIVersion = *validConfig
-	badAPIVersion.APIVersion = "something-not-correct"
-	if badAPIVersion == *validConfig {
-		t.Fatal("sanity check failed")
-	}
-
 	for _, tc := range []struct {
 		name    string
 		cfg     *Config
@@ -520,8 +522,37 @@ func TestValidateConfig(t *testing.T) {
 			name: "valid config",
 			cfg:  validConfig,
 		}, {
-			name:    "bad `apiVersion`",
-			cfg:     &badAPIVersion,
+			name: "bad `apiVersion`",
+			cfg: &Config{
+				APIVersion: "some-bad-api-version",
+				Spec:       &Spec{Notification: &Notification{}},
+			},
+			wantErr: true,
+		}, {
+			name: "no spec",
+			cfg: &Config{
+				APIVersion: "cloud-build-notifiers/v1",
+			},
+			wantErr: true,
+		}, {
+			name: "no spec.notification",
+			cfg: &Config{
+				APIVersion: "cloud-build-notifiers/v1",
+				Spec:       &Spec{},
+			},
+			wantErr: true,
+		}, {
+			name: "subst name with no underscore",
+			cfg: &Config{
+				APIVersion: "cloud-build-notifiers/v1",
+				Spec: &Spec{
+					Notification: &Notification{
+						Substitutions: map[string]string{
+							"FOO": "$(build.id)",
+						},
+					},
+				},
+			},
 			wantErr: true,
 		},
 	} {
@@ -547,7 +578,7 @@ type fakeNotifier struct {
 	notifs chan *cbpb.Build
 }
 
-func (f *fakeNotifier) SetUp(_ context.Context, _ *Config, _ SecretGetter) error {
+func (f *fakeNotifier) SetUp(_ context.Context, _ *Config, _ SecretGetter, _ BindingResolver) error {
 	// Not currently called by any test.
 	return nil
 }
@@ -613,7 +644,7 @@ type errNotifier struct {
 	err error
 }
 
-func (n *errNotifier) SetUp(_ context.Context, _ *Config, _ SecretGetter) error {
+func (n *errNotifier) SetUp(_ context.Context, _ *Config, _ SecretGetter, _ BindingResolver) error {
 	return nil
 }
 func (n *errNotifier) SendNotification(_ context.Context, _ *cbpb.Build) error {
@@ -688,7 +719,7 @@ type fatalNotifier struct {
 	t *testing.T
 }
 
-func (n *fatalNotifier) SetUp(_ context.Context, _ *Config, _ SecretGetter) error {
+func (n *fatalNotifier) SetUp(_ context.Context, _ *Config, _ SecretGetter, _ BindingResolver) error {
 	return nil
 }
 func (n *fatalNotifier) SendNotification(_ context.Context, b *cbpb.Build) error {
