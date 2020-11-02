@@ -36,6 +36,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -604,7 +605,7 @@ func TestNewReceiver(t *testing.T) {
 		t.Fatal("failed to received a Build from the notifier before the timeout")
 	}
 
-	if diff := cmp.Diff(sentBuild, gotBuild); diff != "" {
+	if diff := cmp.Diff(sentBuild, gotBuild, protocmp.Transform()); diff != "" {
 		t.Errorf("unexpected difference between published Build and received Build:\n%s", diff)
 	}
 }

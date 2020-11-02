@@ -13,9 +13,7 @@ require (
 	github.com/google/go-cmp v0.5.1
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/slack-go/slack v0.6.5
-	golang.org/x/sys v0.0.0-20200802091954-4b90ce9b60b3 // indirect
-	golang.org/x/tools v0.0.0-20200731060945-b5fad4ed8dd6 // indirect
-	google.golang.org/genproto v0.0.0-20200731012542-8145dea6a485
+	google.golang.org/genproto v0.0.0-20201102152239-715cce707fb0
 	google.golang.org/grpc v1.31.0 // indirect
 	gopkg.in/yaml.v2 v2.3.0 // indirect
 )
