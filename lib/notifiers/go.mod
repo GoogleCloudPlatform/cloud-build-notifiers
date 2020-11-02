@@ -16,4 +16,5 @@ require (
 	google.golang.org/grpc v1.28.1 // indirect
 	google.golang.org/protobuf v1.25.0
 	gopkg.in/yaml.v2 v2.2.8
+	k8s.io/client-go v11.0.0+incompatible
 )
