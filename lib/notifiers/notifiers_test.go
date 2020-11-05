@@ -179,6 +179,11 @@ func TestMakeCELPredicate(t *testing.T) {
 			filter:    `build.finish_time - build.start_time < duration("300s")`,
 			build:     &cbpb.Build{StartTime: convertToTimestamp(t, "2019-07-01T12:00:00.000-00:00"), FinishTime: convertToTimestamp(t, "2019-07-01T12:00:03.000-00:00")},
 			wantMatch: true,
+		}, {
+			name:      "complex filter with regexp via `matches`",
+			filter:    `build.status in [Build.Status.FAILURE, Build.Status.TIMEOUT] && build.substitutions["TAG_NAME"].matches("^v\\d{1}\\.\\d{1}\\.\\d{3}$")`,
+			build:     &cbpb.Build{Status: cbpb.Build_TIMEOUT, Substitutions: map[string]string{"TAG_NAME": "v1.2.003"}},
+			wantMatch: true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
