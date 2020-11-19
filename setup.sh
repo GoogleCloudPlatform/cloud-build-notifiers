@@ -21,7 +21,7 @@ the '--setup_check' flag that is mentioned in the repo root README.md.
 The currently supported notifier types (which correspond to the directories in
 the repo) are:
 
-* bigquery (alpha - under development)
+* bigquery
 * http
 * slack
 * smtp
