@@ -19,7 +19,7 @@ for your Cloud Build project(s).
 
 There are currently 3 supported notifier types:
 
--   [bigquery](./bigquery/README.md), which writes Build updates and related
+-   [`bigquery`](./bigquery/README.md), which writes Build updates and related
     data to a BigQuery table.
 -   [`http`](./http/README.md), which sends (HTTP `POST`s) a JSON payload to
     another HTTP endpoint.
