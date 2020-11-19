@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Copyright 2020 Google LLC
 # Author: lru@google.com (Leo Rudberg)
 
@@ -7,9 +7,10 @@ set -u
 HELP="
 Cloud Build Notifiers setup script.
 
-This script runs almost all of the setup required for configuring
+This bash script runs almost all of the setup required for configuring
 and deploying a notifier on GCP. It is based on the guide here:
-https://cloud.google.com/cloud-build/docs/configure-notifications
+https://cloud.google.com/cloud-build/docs/configure-notifications.
+
 Setting up any 'secret_name' must be done outside
 this script. This script is assumed to be run in the root of your
 cloud-build-notifiers clone/fork. Currently, this script only deploys
@@ -20,7 +21,7 @@ the '--setup_check' flag that is mentioned in the repo root README.md.
 The currently supported notifier types (which correspond to the directories in
 the repo) are:
 
-* bigquery (under development)
+* bigquery (alpha - under development)
 * http
 * slack
 * smtp
@@ -79,11 +80,12 @@ main() {
   if [ -z "${PROJECT_ID##*:*}" ]; then
     fail "org-scoped project IDs are not allowed by this script"
   fi
+  echo "Fetching project number..."
   PROJECT_NUMBER=$(gcloud projects describe "${PROJECT_ID}" \
     --format="value(projectNumber)") ||
     fail "could not get project number"
 
-  REQUIRED_SERVICES=('Cloud Build API' 'Cloud Run Admin API' 'Cloud Pub/Sub API')
+  REQUIRED_SERVICES=('cloudbuild.googleapis.com' 'run.googleapis.com' 'pubsub.googleapis.com')
   SOURCE_CONFIG_BASENAME=$(basename "${SOURCE_CONFIG_PATH}")
   DESTINATION_BUCKET_NAME="${PROJECT_ID}-notifiers-config"
   DESTINATION_BUCKET_URI="gs://${DESTINATION_BUCKET_NAME}"
@@ -126,11 +128,14 @@ fail() {
 
 check_apis_enabled() {
   if [ -n "${SECRET_NAME}" ]; then
-    REQUIRED_SERVICES+=('Secret Manager API')
+    REQUIRED_SERVICES+=('secretmanager.googleapis.com')
   fi
-  SERVICES=$(gcloud services list --enabled --format='value(config.title)')
+  # Use config.name so that we only have to use the API URLs and don't have to
+  # be clever with whitespace and matching. SERVICES is just a string
+  # containing all of the enabled API URLs separated by spaces.
+  SERVICES=$(gcloud services list --enabled --format='value(config.name)')
   for API in "${REQUIRED_SERVICES[@]}"; do
-    [ -z ${SERVICES[@]/*${API}*/} ] || fail "please enable the ${API}"
+    [[ "${SERVICES}" =~ ${API} ]] || fail "please enable the '${API}' API"
   done
 }
 
