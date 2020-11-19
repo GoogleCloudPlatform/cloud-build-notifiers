@@ -19,17 +19,20 @@ for your Cloud Build project(s).
 
 There are currently 3 supported notifier types:
 
--   [`smtp`](./smtp/README.md), which sends emails via an SMTP server.
+-   [bigquery](./bigquery/README.md), which writes Build updates and related
+    data to a BigQuery table.
 -   [`http`](./http/README.md), which sends (HTTP `POST`s) a JSON payload to
     another HTTP endpoint.
 -   [`slack`](./slack/README.md), which uses a Slack webhook to post a message
     in a Slack channel.
+-   [`smtp`](./smtp/README.md), which sends emails via an SMTP server.
 
 **See the official documentation on Google Cloud for how to configure each notifier:**
 
-- [Configuring SMTP notifications](https://cloud.google.com/cloud-build/docs/configuring-notifications/configure-smtp)
+- [Configuring BigQuery notifications](https://cloud.google.com/cloud-build/docs/configuring-notifications/configure-bigquery)
 - [Configuring HTTP notifications](https://cloud.google.com/cloud-build/docs/configuring-notifications/configure-http)
 - [Configuring Slack notifications](https://cloud.google.com/cloud-build/docs/configuring-notifications/configure-slack)
+- [Configuring SMTP notifications](https://cloud.google.com/cloud-build/docs/configuring-notifications/configure-smtp)
 
 
 ## Setup Script

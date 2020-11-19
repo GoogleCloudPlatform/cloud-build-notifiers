@@ -2,8 +2,6 @@
 
 This notifier pushes build data to a BigQuery instance.
 
-*Alpha Feature - Under Development*
-
 ## Dataset and table setup
 
 The BQ notifier initializes datasets and tables automatically.
@@ -19,7 +17,6 @@ References to already existing tables with differing schemas will throw errors u
 ## Accessing build insights with SQL queries through the BigQuery CLI:
 
 To access BQ data through queries, run the following command below.
-
 
 ```bash
 $ bq query '<SQL QUERY>'
