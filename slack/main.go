@@ -17,6 +17,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
@@ -79,36 +81,60 @@ func (s *slackNotifier) SendNotification(ctx context.Context, build *cbpb.Build)
 }
 
 func (s *slackNotifier) writeMessage(build *cbpb.Build) (*slack.WebhookMessage, error) {
-	txt := fmt.Sprintf(
-		"Cloud Build (%s, %s): %s",
-		build.ProjectId,
-		build.Id,
-		build.Status,
-	)
+
+	commitURL := fmt.Sprintf("https://github.com/CartoDB/%s/commit/%s", build.Substitutions["REPO_NAME"], build.Substitutions["COMMIT_SHA"])
+	logURL := build.LogUrl
 
 	var clr string
+	var buildStatus string
+
 	switch build.Status {
 	case cbpb.Build_SUCCESS:
+		buildStatus = fmt.Sprintf("%s :heavy_check_mark:", build.Status)
 		clr = "good"
 	case cbpb.Build_FAILURE, cbpb.Build_INTERNAL_ERROR, cbpb.Build_TIMEOUT:
+		buildStatus = fmt.Sprintf("%s :facepalm-jenkins:", build.Status)
 		clr = "danger"
 	default:
+		buildStatus = build.Status.String()
 		clr = "warning"
 	}
 
-	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.ChatMedium)
-	if err != nil {
-		return nil, fmt.Errorf("failed to add UTM params: %w", err)
-	}
+	var txt strings.Builder
+	txt.WriteString(fmt.Sprintf(
+		"Cloud Build (%s, %s):\n*%s*\n",
+		build.ProjectId,
+		build.Id,
+		buildStatus,
+	))
+
+	format := "2006-01-02T15:04:05Z07:00"
+	finishTime := time.Parse(format, string(build.FinishTime))
+	startTime := time.Parse(format, string(build.StartTime))
+	buildDuration := finishTime.Sub(startTime)
+	
+	txt.WriteString(fmt.Sprintf("- duration: %s\n", buildDuration))
+	txt.WriteString(fmt.Sprintf("- repository: %s\n", build.Substitutions["REPO_NAME"]))
+	txt.WriteString(fmt.Sprintf("- branch: %s\n", build.Substitutions["BRANCH_NAME"]))
+	txt.WriteString(fmt.Sprintf("- commit: %s\n", build.Substitutions["SHORT_SHA"]))
 
 	atch := slack.Attachment{
-		Text:  txt,
+		Text:  txt.String(),
 		Color: clr,
-		Actions: []slack.AttachmentAction{{
-			Text: "View Logs",
-			Type: "button",
-			URL:  logURL,
-		}},
+		Actions: []slack.AttachmentAction{
+            slack.AttachmentAction{
+                Name:  "Build logs",
+                Text:  "Build logs",
+                Type:  "button",
+                URL: logURL,
+            },
+            slack.AttachmentAction{
+                Name:  "Commit",
+                Text:  "Github commit",
+                Type:  "button",
+                URL: commitURL,
+            },
+        },
 	}
 
 	return &slack.WebhookMessage{Attachments: []slack.Attachment{atch}}, nil
