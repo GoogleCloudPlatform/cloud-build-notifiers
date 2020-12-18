@@ -75,7 +75,7 @@ func (s *slackNotifier) SendNotification(ctx context.Context, build *cbpb.Build)
 		return fmt.Errorf("failed to write Slack message: %w", err)
 	}
 
-	return slack.PostWebhook(s.webhookURL, msg)
+	return slack.PostWebhookContext(ctx, s.webhookURL, msg)
 }
 
 func (s *slackNotifier) writeMessage(build *cbpb.Build) (*slack.WebhookMessage, error) {
