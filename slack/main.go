@@ -15,8 +15,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"text/template"
 
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
@@ -26,6 +28,8 @@ import (
 
 const (
 	webhookURLSecretName = "webhookUrl"
+	textTemplateName     = "textTemplate"
+	defaultTextTemplate  = `Cloud Build ({{ .ProjectId }}, {{ .Id }}): {{ .Status }}`
 )
 
 func main() {
@@ -37,6 +41,7 @@ func main() {
 type slackNotifier struct {
 	filter notifiers.EventFilter
 
+	tmpl       *template.Template
 	webhookURL string
 }
 
@@ -61,6 +66,15 @@ func (s *slackNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg not
 	}
 	s.webhookURL = wu
 
+	templateSource, ok := cfg.Spec.Notification.Delivery[textTemplateName].(string)
+	if !ok {
+		templateSource = defaultTextTemplate
+	}
+	s.tmpl, err = template.New("text").Parse(templateSource)
+	if err != nil {
+		return fmt.Errorf("failed to parse text template: %w", err)
+	}
+
 	return nil
 }
 
@@ -79,12 +93,11 @@ func (s *slackNotifier) SendNotification(ctx context.Context, build *cbpb.Build)
 }
 
 func (s *slackNotifier) writeMessage(build *cbpb.Build) (*slack.WebhookMessage, error) {
-	txt := fmt.Sprintf(
-		"Cloud Build (%s, %s): %s",
-		build.ProjectId,
-		build.Id,
-		build.Status,
-	)
+	var b bytes.Buffer
+	if err := s.tmpl.Execute(&b, build); err != nil {
+		return nil, fmt.Errorf("executing text template: %w", err)
+	}
+	txt := b.String()
 
 	var clr string
 	switch build.Status {
