@@ -7,7 +7,7 @@ replace github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers => ..
 require (
 	cloud.google.com/go v0.75.0
 	cloud.google.com/go/bigquery v1.14.0
-	github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers v0.0.0-20201207173907-e18059bc9a58
+	github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers v0.0.0-00010101000000-000000000000
 	github.com/antlr/antlr4 v0.0.0-20210105212045-464bcbc32de2 // indirect
 	github.com/docker/cli v20.10.2+incompatible // indirect
 	github.com/docker/docker v20.10.2+incompatible // indirect
