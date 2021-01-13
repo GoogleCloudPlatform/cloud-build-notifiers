@@ -6,7 +6,7 @@ replace github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers => ..
 
 require (
 	cloud.google.com/go v0.75.0 // indirect
-	github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers v0.0.0-20201207173907-e18059bc9a58
+	github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers v0.0.0-00010101000000-000000000000
 	github.com/antlr/antlr4 v0.0.0-20210105212045-464bcbc32de2 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/protobuf v1.4.3
