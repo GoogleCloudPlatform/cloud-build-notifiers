@@ -1,0 +1,7 @@
+apiVersion: cloud-build-notifiers/v1
+kind: YourNotifier
+metadata:
+  name: logging-sample
+spec:
+  notification:
+    filter: build.status == Build.Status.SUCCESS
