@@ -15,11 +15,7 @@
 steps:
 #Build the binary and put it into the builder image.
 - name: gcr.io/cloud-builders/docker
-  args:
-  - build
-  - --tag=gcr.io/$PROJECT_ID/logging-sample
-  - --file=./samples/logging-sample/Dockerfile
-  - '.'
+  args: ['build', '--tag=gcr.io/$PROJECT_ID/logging-sample', '.']
 
 - # Push the container image to Container Registry
   name: gcr.io/cloud-builders/docker
