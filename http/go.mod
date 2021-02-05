@@ -5,16 +5,16 @@ go 1.14
 replace github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers => ../lib/notifiers
 
 require (
-	cloud.google.com/go v0.75.0 // indirect
-	github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers v0.0.0-00010101000000-000000000000
-	github.com/antlr/antlr4 v0.0.0-20210105212045-464bcbc32de2 // indirect
+	cloud.google.com/go v0.76.0 // indirect
+	cloud.google.com/go/storage v1.13.0 // indirect
+	github.com/antlr/antlr4 v0.0.0-20210203043838-a60c32d36933 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/protobuf v1.4.3
-	golang.org/x/oauth2 v0.0.0-20210113160501-8b1d76fa0423 // indirect
-	golang.org/x/sys v0.0.0-20210113181707-4bcb84eeeb78 // indirect
+	github.com/google/cel-go v0.7.1 // indirect
+	go.opencensus.io v0.22.6 // indirect
+	golang.org/x/oauth2 v0.0.0-20210201163806-010130855d6c // indirect
 	golang.org/x/text v0.3.5 // indirect
-	golang.org/x/tools v0.0.0-20210113180300-f96436850f18 // indirect
-	google.golang.org/genproto v0.0.0-20210113195801-ae06605f4595
-	google.golang.org/grpc v1.34.1 // indirect
+	google.golang.org/api v0.39.0 // indirect
+	google.golang.org/genproto v0.0.0-20210204154452-deb828366460
 	google.golang.org/protobuf v1.25.0
 )
