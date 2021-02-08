@@ -1,6 +1,5 @@
 // [START cloudbuild_logging_sample_main]
 // [START cloudbuild_logging_sample_imports]
-
 package main
 
 import (
