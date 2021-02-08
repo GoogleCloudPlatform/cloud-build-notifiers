@@ -1,4 +1,4 @@
-# Cloud Build Notifier Sample?
+# Cloud Build Notifier Sample
 
 This sample shows how to create a simple Cloud Build notifier.
 
