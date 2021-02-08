@@ -1,3 +1,6 @@
+// [START cloudbuild_logging_sample_main]
+// [START cloudbuild_logging_sample_imports]
+
 package main
 
 import (
@@ -9,17 +12,23 @@ import (
         "github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
         "github.com/golang/protobuf/proto"
 )
+// [END cloudbuild_logging_sample_imports]
 
+// [START cloudbuild_logging_sample_main_func]
 func main() {
     if err := notifiers.Main(new(logger)); err != nil {
         log.Fatalf("fatal error: %v", err)
     }
 }
+// [END cloudbuild_logging_sample_main_func]
 
+// [START cloudbuild_logging_sample_struct]
 type logger struct {
     filter notifiers.EventFilter
 }
+// [END cloudbuild_logging_sample_struct]
 
+// [START cloudbuild_logging_sample_setup_notify]
 func (h *logger) SetUp(_ context.Context, cfg *notifiers.Config, _ notifiers.SecretGetter, _ notifiers.BindingResolver) error {
     prd, err := notifiers.MakeCELPredicate(cfg.Spec.Notification.Filter)
      if err != nil {
@@ -40,3 +49,5 @@ func (h *logger) SendNotification(ctx context.Context, build *cbpb.Build) error 
 
     return nil
 }
+// [END cloudbuild_logging_sample_setup_notify]
+// [END cloudbuild_logging_sample_main]

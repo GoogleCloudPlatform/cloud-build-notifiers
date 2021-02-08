@@ -1,3 +1,5 @@
+ # [START cloudbuild_samples_success]
  steps:
  - name: busybox
    args: 'true'
+ # [END cloudbuild_samples_success]

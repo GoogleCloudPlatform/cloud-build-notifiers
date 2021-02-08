@@ -1,3 +1,4 @@
+# [START cloudbuild_logging_sample_notifier_config]
 apiVersion: cloud-build-notifiers/v1
 kind: YourNotifier
 metadata:
@@ -5,3 +6,4 @@ metadata:
 spec:
   notification:
     filter: build.status == Build.Status.SUCCESS
+# [END cloudbuild_logging_sample_notifier_config]

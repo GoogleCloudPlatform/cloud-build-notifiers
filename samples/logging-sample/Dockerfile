@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# [START cloudbuild_logging_sample_dockerfile]
+
 FROM golang AS build-env
 COPY . /go-src/
 WORKDIR /go-src/
@@ -30,3 +32,5 @@ RUN set -x && apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -
 FROM gcr.io/distroless/base
 COPY --from=build-env /go-app /
 ENTRYPOINT ["/go-app", "--v=1", "--alsologtostderr"]
+
+# [END cloudbuild_logging_sample_dockerfile]

@@ -12,16 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# [START cloudbuild_logging_sample_yaml]
 steps:
-#Build the binary and put it into the builder image.
-- name: gcr.io/cloud-builders/docker
+- # Build the binary and put it into the builder image.
+  name: gcr.io/cloud-builders/docker
   args: ['build', '--tag=gcr.io/$PROJECT_ID/logging-sample', '.']
 
 - # Push the container image to Container Registry
   name: gcr.io/cloud-builders/docker
   args: ['push', 'gcr.io/$PROJECT_ID/logging-sample']
 
-- name: google/cloud-sdk
+- # Deploy to Cloud Run
+  name: google/cloud-sdk
   args: 
     - gcloud
     - run
@@ -36,4 +38,4 @@ steps:
 # Push the image with tags.
 images:
 - gcr.io/$PROJECT_ID/logging-sample
-
+# [END cloudbuild_logging_sample_yaml]
