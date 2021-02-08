@@ -1,18 +1,14 @@
 package main
 
-import ("context"
-        "flag"
-        "github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
-        log "github.com/golang/glog"
-        cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
+import (
+        "context"
         "fmt"
+
+        cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
+        log "github.com/golang/glog"
+        "github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
         "github.com/golang/protobuf/proto"
 )
-
-func init(){
-    // To parse the flags for golang/glog
-    flag.Parse()
-}
 
 func main() {
     if err := notifiers.Main(new(logger)); err != nil {
@@ -42,6 +38,5 @@ func (h *logger) SendNotification(ctx context.Context, build *cbpb.Build) error 
         log.V(1).Infof("build (%q, %q) did NOT match CEL filter", build.ProjectId, build.Id)
     }
 
-    log.Flush()
     return nil
 }

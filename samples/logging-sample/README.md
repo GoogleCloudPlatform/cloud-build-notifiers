@@ -1,4 +1,4 @@
-# Cloud Run System Package Sample
+# Cloud Build Notifier Sample?
 
 This sample shows how to create a simple Cloud Build notifier.
 
@@ -22,6 +22,8 @@ gsutil cp $CONFIG_FILE_NAME gs://$BUCKET_NAME/$CONFIG_FILE_NAME
 
 ## Build and Deploy
 
+Commands should be run from this directory: `samples/logging-sample`.
+
 ```sh
 gcloud builds submit .  --substitutions=_CONFIG_PATH=gs://$BUCKET_NAME/$CONFIG_FILE_NAME
 ```
@@ -38,6 +40,6 @@ Follow the [create your own notifer tutorial](https://cloud.devsite.corp.google.
 Test the output by running the `success.yaml` and `failure.yaml`.  The failure and success should trigger the Cloud Run service and be reflected in the Cloud Run logs.  The `success.yaml` and `failure.yaml` files are available in the directory one level up from this one.
 
 ```sh
-gcloud builds submit --config ../success.yaml
-gcloud builds submit --config ../failure.yaml
+gcloud builds submit --config ../success.yaml --no-source
+gcloud builds submit --config ../failure.yaml --no-source
 ```
