@@ -10,14 +10,14 @@ First create a bucket.
 
 ```sh
 export BUCKET_NAME=your_bucket_name
-gsutil mb gs://$BUCKET_NAME/
+gsutil mb gs://${BUCKET_NAME}/
 ```
 
 Then upload the provided notifier config to the bucket.
 
 ```sh
 export CONFIG_FILE_NAME=notifier_config.yaml
-gsutil cp $CONFIG_FILE_NAME gs://$BUCKET_NAME/$CONFIG_FILE_NAME
+gsutil cp ${CONFIG_FILE_NAME} gs://${BUCKET_NAME}/${CONFIG_FILE_NAME}
 ```
 
 ## Build and Deploy
@@ -25,7 +25,7 @@ gsutil cp $CONFIG_FILE_NAME gs://$BUCKET_NAME/$CONFIG_FILE_NAME
 Commands should be run from this directory: `samples/logging-sample`.
 
 ```sh
-gcloud builds submit .  --substitutions=_CONFIG_PATH=gs://$BUCKET_NAME/$CONFIG_FILE_NAME
+gcloud builds submit .  --substitutions=_CONFIG_PATH=gs://${BUCKET_NAME}/${CONFIG_FILE_NAME}
 ```
 
 Running this `cloudbuild.yaml` will create a Cloud Run service.  You can see it in the console [here](https://console.cloud.google.com/run).
