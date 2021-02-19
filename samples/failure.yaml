@@ -1,0 +1,5 @@
+# [START cloudbuild_samples_failure]
+steps:
+  - name: busybox
+    args: 'false'
+# [END cloudbuild_samples_failure]
