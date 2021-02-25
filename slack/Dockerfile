@@ -15,7 +15,6 @@
 FROM golang AS build-env
 COPY . /go-src/
 WORKDIR /go-src/slack
-RUN go test /go-src/slack
 RUN go build -o /go-app .
 
 # From the Cloud Run docs:
