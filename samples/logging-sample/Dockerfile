@@ -16,7 +16,7 @@
 
 FROM golang AS build-env
 COPY . /go-src/
-WORKDIR /go-src/
+WORKDIR /go-src/samples/logging-sample
 RUN go build -o /go-app .
 
 # From the Cloud Run docs:
