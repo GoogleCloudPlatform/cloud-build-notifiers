@@ -32,7 +32,7 @@ Running this `cloudbuild.yaml` will create a Cloud Run service.  You can see it 
 
 
 ## Set up permissions 
-Follow the [create your own notifer tutorial](https://cloud.devsite.corp.google.com/cloud-build/docs/configuring-notifications/create-notifier#configuring_notifications) to set up the permissions. Specifically, PubSub must be able to create tokens and invoke the Cloud Run service.
+Follow the [create your own notifer tutorial](https://cloud.google.com/cloud-build/docs/configuring-notifications/create-notifier#configuring_notifications) to set up the permissions. Specifically, PubSub must be able to create tokens and invoke the Cloud Run service.
 
 
 ## Try it out!

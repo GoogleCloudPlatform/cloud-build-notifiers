@@ -14,9 +14,9 @@
 
 # [START cloudbuild_logging_sample_dockerfile]
 
-FROM golang AS build-env
+FROM golang:1.15 AS build-env
 COPY . /go-src/
-WORKDIR /go-src/samples/logging-sample
+WORKDIR /go-src/
 RUN go build -o /go-app .
 
 # From the Cloud Run docs:
