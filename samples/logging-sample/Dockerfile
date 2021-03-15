@@ -17,7 +17,6 @@
 FROM golang AS build-env
 COPY . /go-src/
 WORKDIR /go-src/
-RUN go mod tidy
 RUN go build -o /go-app .
 
 # From the Cloud Run docs:
