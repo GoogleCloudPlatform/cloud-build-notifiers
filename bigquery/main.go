@@ -235,11 +235,11 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 	}
 
 	for _, step := range build.GetSteps() {
-		startTime, err := parsePBTime(step.Timing.StartTime)
+		startTime, err := parsePBTime(step.GetTiming().GetStartTime())
 		if err != nil {
 			return fmt.Errorf("error parsing start time for step: %v", err)
 		}
-		endTime, err := parsePBTime(step.Timing.EndTime)
+		endTime, err := parsePBTime(step.GetTiming().GetEndTime())
 		if err != nil {
 			return fmt.Errorf("error parsing end time for step: %v", err)
 		}
