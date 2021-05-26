@@ -534,6 +534,32 @@ func TestSendNotification(t *testing.T) {
 		wantErr: false,
 		wantRow: true,
 	}, {
+		name: "no build step timing",
+		cfg: &notifiers.Config{
+			Spec: &notifiers.Spec{
+				Notification: &notifiers.Notification{
+					Filter: `build.build_trigger_id == "123e4567-e89b-12d3-a456-426614174000" `,
+					Delivery: map[string]interface{}{
+						"table": "projects/project_name/datasets/dataset_name/tables/notinitialized",
+					},
+				},
+			},
+		},
+		build: &cbpb.Build{
+			ProjectId:      "Project ID",
+			Id:             "Build ID",
+			BuildTriggerId: "123e4567-e89b-12d3-a456-426614174000",
+			Status:         cbpb.Build_SUCCESS,
+			CreateTime:     timestamppb.Now(),
+			StartTime:      timestamppb.Now(),
+			FinishTime:     timestamppb.Now(),
+			Tags:           []string{},
+			Steps:          []*cbpb.BuildStep{{Name: "test"}},
+			Options:        &cbpb.BuildOptions{Env: []string{}},
+		},
+		wantErr: true,
+		wantRow: false,
+	}, {
 		name: "table exists with bad schema",
 		cfg: &notifiers.Config{
 			Spec: &notifiers.Spec{
