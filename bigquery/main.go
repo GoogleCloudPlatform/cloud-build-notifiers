@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"os"
 	"regexp"
+	"time"
 
 	"cloud.google.com/go/bigquery"
 	"cloud.google.com/go/civil"
@@ -233,25 +234,34 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 	if err != nil {
 		return fmt.Errorf("error parsing FinishTime: %v", err)
 	}
-
+	unixZeroTimestamp, err := ptypes.TimestampProto(time.Unix(0, 0))
+	if err != nil {
+		return err
+	}
 	for _, step := range build.GetSteps() {
+		st := step.GetTiming().GetStartTime()
+		et := step.GetTiming().GetEndTime()
+		if st == nil {
+			st = unixZeroTimestamp
+		}
+		if et == nil {
+			et = unixZeroTimestamp
+		}
+		startTime, err := parsePBTime(st)
+		if err != nil {
+			return fmt.Errorf("error parsing StartTime: %v", err)
+		}
+		endTime, err := parsePBTime(et)
+		if err != nil {
+			return fmt.Errorf("error parsing EndTime: %v", err)
+		}
 		newStep := &buildStep{
-			Name:   step.Name,
-			ID:     step.Id,
-			Status: step.GetStatus().String(),
-			Args:   step.Args,
-		}
-		if step.GetTiming().GetStartTime() != nil {
-			startTime, err := parsePBTime(step.GetTiming().GetStartTime())
-			if err == nil {
-				newStep.StartTime = startTime
-			}
-		}
-		if step.GetTiming().GetEndTime() != nil {
-			endTime, err := parsePBTime(step.GetTiming().GetEndTime())
-			if err == nil {
-				newStep.EndTime = endTime
-			}
+			Name:      step.Name,
+			ID:        step.Id,
+			Status:    step.GetStatus().String(),
+			Args:      step.Args,
+			StartTime: startTime,
+			EndTime:   endTime,
 		}
 		buildSteps = append(buildSteps, newStep)
 	}
