@@ -557,8 +557,8 @@ func TestSendNotification(t *testing.T) {
 			Steps:          []*cbpb.BuildStep{{Name: "test"}},
 			Options:        &cbpb.BuildOptions{Env: []string{}},
 		},
-		wantErr: true,
-		wantRow: false,
+		wantErr: false,
+		wantRow: true,
 	}, {
 		name: "table exists with bad schema",
 		cfg: &notifiers.Config{
