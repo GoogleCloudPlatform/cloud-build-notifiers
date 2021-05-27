@@ -249,7 +249,7 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 		}
 		if step.GetTiming().GetEndTime() != nil {
 			endTime, err := parsePBTime(step.GetTiming().GetEndTime())
-			if err != nil {
+			if err == nil {
 				newStep.EndTime = endTime
 			}
 		}
