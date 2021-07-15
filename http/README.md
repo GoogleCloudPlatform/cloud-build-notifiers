@@ -16,3 +16,5 @@ This notifier expects the following fields in the `delivery` map to be set:
 
 - `url`: The HTTP endpoint to which `POST` requests will be sent. No sort of
 authentication is expected or used.
+- `authentication`: The reference to a configuration in the `secrets` list.
+  This field is optional, if set, a Bearer token is expected.

@@ -22,3 +22,9 @@ spec:
     delivery:
       # The `http(s)://` protocol prefix is required.
       url: https://some.example.com/notify
+      # The following is optional
+      authentication:
+        secretRef: http-auth
+  secrets:
+  - name: http-auth
+    value: projects/<Project ID>/secrets/<Secret Name>/versions/latest

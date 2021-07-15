@@ -34,11 +34,12 @@ func main() {
 }
 
 type httpNotifier struct {
-	filter notifiers.EventFilter
-	url    string
+	filter         notifiers.EventFilter
+	url            string
+	authentication string
 }
 
-func (h *httpNotifier) SetUp(_ context.Context, cfg *notifiers.Config, _ notifiers.SecretGetter, _ notifiers.BindingResolver) error {
+func (h *httpNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg notifiers.SecretGetter, _ notifiers.BindingResolver) error {
 	prd, err := notifiers.MakeCELPredicate(cfg.Spec.Notification.Filter)
 	if err != nil {
 		return fmt.Errorf("failed to create CELPredicate: %w", err)
@@ -50,6 +51,25 @@ func (h *httpNotifier) SetUp(_ context.Context, cfg *notifiers.Config, _ notifie
 		return fmt.Errorf("expected delivery config %v to have string field `url`", cfg.Spec.Notification.Delivery)
 	}
 	h.url = url
+
+	_, ok = cfg.Spec.Notification.Delivery["authentication"]
+	if ok {
+		authRef, err := notifiers.GetSecretRef(cfg.Spec.Notification.Delivery, "authentication")
+		if err != nil {
+			return fmt.Errorf("failed to get ref for secret `password`: %w", err)
+		}
+
+		authResource, err := notifiers.FindSecretResourceName(cfg.Spec.Secrets, authRef)
+		if err != nil {
+			return fmt.Errorf("failed to find Secret resource name for reference %q: %w", authRef, err)
+		}
+
+		auth, err := sg.GetSecret(ctx, authResource)
+		if err != nil {
+			fmt.Errorf("failed to get HTTP authentication: %w", err)
+		}
+		h.authentication = auth
+	}
 
 	return nil
 }
@@ -81,6 +101,9 @@ func (h *httpNotifier) SendNotification(ctx context.Context, build *cbpb.Build) 
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "GCB-Notifier/0.1 (http)")
+	if h.authentication != "" {
+		req.Header.Set("Authorization", "Bearer "+h.authentication)
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
