@@ -88,7 +88,7 @@ func (s *slackNotifier) writeMessage(build *cbpb.Build) (*slack.WebhookMessage, 
 	//	build.SourceProvenance.ResolvedRepoSource.GetBranchName(),
 	//)
 
-	txt := fmt.Sprintf("%+v\n", build)
+	txt := fmt.Sprintf("SHOW ME WHAT U GOT\n%+v\n", build)
 
 	var clr string
 	switch build.Status {
