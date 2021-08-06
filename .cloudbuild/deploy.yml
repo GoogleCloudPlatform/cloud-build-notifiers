@@ -1,0 +1,14 @@
+substitutions:
+  # these variable are expected to remain static across environments
+  _GCR_IMAGE_NAME: gcr.io/bf-container-registry/bf-product/cloud-build-notifiers
+
+steps:
+  - id: Docker Build
+    name: 'gcr.io/kaniko-project/executor:latest'
+    args:
+      - --build-arg=BRANCH_NAME=${BRANCH_NAME}
+      - --build-arg=BUILD_PROJECT=${PROJECT_ID}
+      - --build-arg=BUILD_ID=${BUILD_ID}
+      - --build-arg=BUILD_SERVICE=cloudbuild
+      - --destination=${_GCR_IMAGE_NAME}:${SHORT_SHA}
+      - --cache=true
