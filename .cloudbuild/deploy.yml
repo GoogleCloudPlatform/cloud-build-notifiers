@@ -6,6 +6,7 @@ steps:
   - id: Docker Build
     name: 'gcr.io/kaniko-project/executor:latest'
     args:
+      - --dockerfile=slack/Dockerfile
       - --build-arg=BRANCH_NAME=${BRANCH_NAME}
       - --build-arg=BUILD_PROJECT=${PROJECT_ID}
       - --build-arg=BUILD_ID=${BUILD_ID}
