@@ -15,6 +15,14 @@ func TestWriteMessage(t *testing.T) {
 		Id:        "some-build-id",
 		Status:    cbpb.Build_SUCCESS,
 		LogUrl:    "https://some.example.com/log/url?foo=bar",
+		SourceProvenance: &cbpb.SourceProvenance{
+			ResolvedRepoSource: &cbpb.RepoSource{
+				RepoName: "test-repo",
+				Revision: &cbpb.RepoSource_BranchName{
+					BranchName: "test-branch",
+				},
+			},
+		},
 	}
 
 	got, err := n.writeMessage(b)
@@ -24,7 +32,8 @@ func TestWriteMessage(t *testing.T) {
 
 	want := &slack.WebhookMessage{
 		Attachments: []slack.Attachment{{
-			Text:  "Cloud Build (my-project-id, some-build-id): SUCCESS",
+			//Text:  "Cloud Build (my-project-id, some-build-id): SUCCESS",
+			Text:  ":test-repo: test-repo SUCCESS (my-project-id) \n test-branch",
 			Color: "good",
 			Actions: []slack.AttachmentAction{{
 				Text: "View Logs",

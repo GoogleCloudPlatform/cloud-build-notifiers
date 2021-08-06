@@ -80,13 +80,12 @@ func (s *slackNotifier) SendNotification(ctx context.Context, build *cbpb.Build)
 
 func (s *slackNotifier) writeMessage(build *cbpb.Build) (*slack.WebhookMessage, error) {
 	txt := fmt.Sprintf(
-		":%s: %s %s (%s) \n %s : %s",
+		":%s: %s %s (%s) \n %s",
 		build.SourceProvenance.ResolvedRepoSource.RepoName,
 		build.SourceProvenance.ResolvedRepoSource.RepoName,
 		build.Status,
 		build.ProjectId,
 		build.SourceProvenance.ResolvedRepoSource.GetBranchName(),
-		build.LogUrl,
 	)
 
 	var clr string
