@@ -79,16 +79,22 @@ func (s *slackNotifier) SendNotification(ctx context.Context, build *cbpb.Build)
 }
 
 func (s *slackNotifier) writeMessage(build *cbpb.Build) (*slack.WebhookMessage, error) {
-	//txt := fmt.Sprintf(
-	//	":%s: %s %s (%s) \n %s",
-	//	build.SourceProvenance.ResolvedRepoSource.RepoName,
-	//	build.SourceProvenance.ResolvedRepoSource.RepoName,
-	//	build.Status,
-	//	build.ProjectId,
-	//	build.SourceProvenance.ResolvedRepoSource.GetBranchName(),
-	//)
-
-	txt := fmt.Sprintf("SHOW ME WHAT U GOT\n%+v\n", build)
+	repoName, ok := build.Substitutions["REPO_NAME"]
+	if !ok {
+		repoName = "UNKNOWN_REPO"
+	}
+	branchName, ok := build.Substitutions["BRANCH_NAME"]
+	if !ok {
+		branchName = "UNKNOWN_BRANCH"
+	}
+	txt := fmt.Sprintf(
+		":%s: %s %s (%s) \n %s",
+		repoName,
+		repoName,
+		build.Status,
+		build.ProjectId,
+		branchName,
+	)
 
 	var clr string
 	switch build.Status {
