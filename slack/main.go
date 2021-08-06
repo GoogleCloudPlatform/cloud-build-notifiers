@@ -87,13 +87,18 @@ func (s *slackNotifier) writeMessage(build *cbpb.Build) (*slack.WebhookMessage, 
 	if !ok {
 		branchName = "UNKNOWN_BRANCH"
 	}
+	commitSha, ok := build.Substitutions["SHORT_SHA"]
+	if !ok {
+		commitSha = "UNKNOWN_COMMIT_SHA"
+	}
 	txt := fmt.Sprintf(
-		":%s: %s %s (%s) \n %s",
+		":%s: %s %s (%s) \n Branch: %s Short SHA: %s",
 		repoName,
 		repoName,
 		build.Status,
 		build.ProjectId,
 		branchName,
+		commitSha,
 	)
 
 	var clr string
