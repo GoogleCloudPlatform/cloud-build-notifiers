@@ -79,11 +79,48 @@ func (s *slackNotifier) SendNotification(ctx context.Context, build *cbpb.Build)
 }
 
 func (s *slackNotifier) writeMessage(build *cbpb.Build) (*slack.WebhookMessage, error) {
+	repoName, ok := build.Substitutions["REPO_NAME"]
+	if !ok {
+		repoName = "UNKNOWN_REPO"
+	}
+	branchName, ok := build.Substitutions["BRANCH_NAME"]
+	if !ok {
+		branchName = "UNKNOWN_BRANCH"
+	}
+	commitSha, ok := build.Substitutions["SHORT_SHA"]
+	if !ok {
+		commitSha = "UNKNOWN_COMMIT_SHA"
+	}
+	commitMsg, ok := build.Substitutions["_COMMIT_MESSAGE"]
+	if !ok {
+		commitMsg = "UNKNOWN_COMMIT_MESSAGE"
+	}
+	commitURL, ok := build.Substitutions["_COMMIT_URL"]
+	if !ok {
+		commitURL = "UNKNOWN_COMMIT_URL"
+	}
+	commitAuthor, ok := build.Substitutions["_COMMIT_AUTHOR"]
+	if !ok {
+		commitAuthor = "UNKNOWN_COMMIT_AUTHOR"
+	}
+
+	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.ChatMedium)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add UTM params: %w", err)
+	}
+
 	txt := fmt.Sprintf(
-		"Cloud Build (%s, %s): %s",
-		build.ProjectId,
-		build.Id,
+		"%s: :%s: %s (%s) <%s|View Build>\n*Branch*: %s *Author*: %s \n<%s|Commit> *%s*: %s",
 		build.Status,
+		repoName,
+		repoName,
+		build.ProjectId,
+		logURL,
+		branchName,
+		commitAuthor,
+		commitURL,
+		commitSha,
+		commitMsg,
 	)
 
 	var clr string
@@ -96,19 +133,9 @@ func (s *slackNotifier) writeMessage(build *cbpb.Build) (*slack.WebhookMessage, 
 		clr = "warning"
 	}
 
-	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.ChatMedium)
-	if err != nil {
-		return nil, fmt.Errorf("failed to add UTM params: %w", err)
-	}
-
 	atch := slack.Attachment{
 		Text:  txt,
 		Color: clr,
-		Actions: []slack.AttachmentAction{{
-			Text: "View Logs",
-			Type: "button",
-			URL:  logURL,
-		}},
 	}
 
 	return &slack.WebhookMessage{Attachments: []slack.Attachment{atch}}, nil
