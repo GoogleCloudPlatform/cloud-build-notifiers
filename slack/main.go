@@ -25,7 +25,8 @@ import (
 )
 
 const (
-	webhookURLSecretName = "webhookUrl"
+	webhookURLSecretName          = "webhookUrl"
+	notificationChannelConfigName = "notificationChannel"
 )
 
 func main() {
@@ -37,7 +38,8 @@ func main() {
 type slackNotifier struct {
 	filter notifiers.EventFilter
 
-	webhookURL string
+	webhookURL          string
+	notificationChannel string
 }
 
 func (s *slackNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg notifiers.SecretGetter, _ notifiers.BindingResolver) error {
@@ -60,6 +62,11 @@ func (s *slackNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg not
 		return fmt.Errorf("failed to get token secret: %w", err)
 	}
 	s.webhookURL = wu
+
+	channelRef, ok := cfg.Spec.Notification.Delivery[notificationChannelConfigName]
+	if ok {
+		s.notificationChannel, _ = channelRef.(string)
+	}
 
 	return nil
 }
@@ -138,5 +145,8 @@ func (s *slackNotifier) writeMessage(build *cbpb.Build) (*slack.WebhookMessage, 
 		Color: clr,
 	}
 
-	return &slack.WebhookMessage{Attachments: []slack.Attachment{atch}}, nil
+	return &slack.WebhookMessage{
+		Attachments: []slack.Attachment{atch},
+		Channel:     s.notificationChannel,
+	}, nil
 }
