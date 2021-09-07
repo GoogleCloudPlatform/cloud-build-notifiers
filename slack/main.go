@@ -65,8 +65,12 @@ func (s *slackNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg not
 
 	channelRef, ok := cfg.Spec.Notification.Delivery[notificationChannelConfigName]
 	if ok {
+	    log.Infof("got notification channel config name %q", channelRef)
 		s.notificationChannel, _ = channelRef.(string)
-	}
+	    log.Infof("got notification channel config name %q", s.notificationChannel)
+	} else {
+	    log.Infof("could not get got notification channel config name %q", ok)
+    }
 
 	return nil
 }
@@ -145,6 +149,7 @@ func (s *slackNotifier) writeMessage(build *cbpb.Build) (*slack.WebhookMessage, 
 		Color: clr,
 	}
 
+	log.Infof("sending Slack webhook to channel %q", s.notificationChannel)
 	return &slack.WebhookMessage{
 		Attachments: []slack.Attachment{atch},
 		Channel:     s.notificationChannel,
