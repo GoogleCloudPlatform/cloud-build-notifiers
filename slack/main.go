@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	"cloud.google.com/go/storage"
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
 	"github.com/slack-go/slack"
@@ -64,21 +65,61 @@ func (s *slackNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg not
 	return nil
 }
 
-func (s *slackNotifier) SendNotification(ctx context.Context, build *cbpb.Build) error {
+func (s *slackNotifier) SendNotification(ctx context.Context, build *cbpb.Build) (err error) {
 	if !s.filter.Apply(ctx, build) {
 		return nil
 	}
 
 	log.Infof("sending Slack webhook for Build %q (status: %q)", build.Id, build.Status)
-	msg, err := s.writeMessage(build)
-	if err != nil {
-		return fmt.Errorf("failed to write Slack message: %w", err)
+	attachmentMsgOpt := s.buildMessage(build)
+	timestamp := s.checkForUpdateTimestamp(build)
+	if timestamp != "" {
+		_, timestamp, err = slack.PostMessage(s.notificationChannel, attachmentMsgOpt)
+		// 4. write GCS object BUILD_ID -> timestamp
+	} else {
+		_, _, _, err = slack.UpdateMessage(s.notificationChannel, timestamp, attachmentMsgOpt)
 	}
-
-	return slack.PostWebhook(s.webhookURL, msg)
 }
 
-func (s *slackNotifier) writeMessage(build *cbpb.Build) (*slack.WebhookMessage, error) {
+func (s *slackNotifier) checkForUpdateTimestamp(build *cbpb.Build) (timestamp string) {
+	ctx := context.Background()
+	sc, err := storage.NewClient(ctx)
+	if err != nil {
+		return
+	}
+	defer sc.Close()
+
+	cfgPath, ok := os.GetEnv("CONFIG_PATH")
+	if !ok {
+		return
+	}
+
+	if trm := strings.TrimPrefix(cfgPath, "gs://"); trm != cfgPath {
+		cfgPath = trm
+	} else {
+		return
+	}
+
+	split := strings.SplitN(cfgPath, "/", 2)
+	bucket := split[0]
+
+	path := fmt.Sprintf("state/%q", build.Id) // or build.GetId()
+	r, err := sc.NewReader(ctx, bucket, path)
+	if err != nil {
+		return
+	}
+	defer r.Close()
+
+	// will move to io in golang 1.16
+	if b, err := ioutil.ReadAll(r); err != nil {
+		return
+	}
+
+	// validate?
+	return (b)
+}
+
+func (s *slackNotifier) buildAttachmentMessageOption(build *cbpb.Build) *slack.MsgOption {
 	repoName, ok := build.Substitutions["REPO_NAME"]
 	if !ok {
 		repoName = "UNKNOWN_REPO"
@@ -106,7 +147,7 @@ func (s *slackNotifier) writeMessage(build *cbpb.Build) (*slack.WebhookMessage, 
 
 	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.ChatMedium)
 	if err != nil {
-		return nil, fmt.Errorf("failed to add UTM params: %w", err)
+		logURL = build.LogUrl
 	}
 
 	txt := fmt.Sprintf(
@@ -133,10 +174,10 @@ func (s *slackNotifier) writeMessage(build *cbpb.Build) (*slack.WebhookMessage, 
 		clr = "warning"
 	}
 
-	atch := slack.Attachment{
+	attachment := slack.Attachment{
 		Text:  txt,
 		Color: clr,
 	}
 
-	return &slack.WebhookMessage{Attachments: []slack.Attachment{atch}}, nil
+	return &slack.MsgOptionAttachments(attachment)
 }
