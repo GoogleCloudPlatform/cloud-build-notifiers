@@ -1,5 +1,11 @@
 # Cloud Build Notifiers
 
+## Brandfolder Fork
+### Development Flow
+...
+
+## Google README
+
 This repo provides deployable notifier images and sources, as well as libraries
 for creating new notifiers.
 
