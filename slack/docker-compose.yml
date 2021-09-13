@@ -1,0 +1,9 @@
+version: "3.9"
+services:
+  slack:
+    build:
+      target: build-env
+      context: ../
+      dockerfile: slack/Dockerfile
+    volumes:
+      - ../:/app
