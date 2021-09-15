@@ -6,4 +6,4 @@ services:
       context: ../
       dockerfile: slack/Dockerfile
     volumes:
-      - ../:/app
+      - ../:/go-src
