@@ -17,31 +17,18 @@ steps:
 - name: gcr.io/cloud-builders/docker
   args:
   - build
-  - --tag=${_REGISTRY}/slack:${TAG_NAME}
-  - --tag=${_REGISTRY}/slack:${_MAJOR_LATEST}
-  - --tag=${_REGISTRY}/slack:latest
+  - --tag=us-docker.pkg.dev/devops-309220/metrio/slack-build-notifier:$COMMIT_SHA
   - --file=./slack/Dockerfile
   - '.'
 # Run the smoketest to verify that everything built correctly.
-- name: ${_REGISTRY}/slack:${TAG_NAME}
+- name: us-docker.pkg.dev/devops-309220/metrio/slack-build-notifier:$COMMIT_SHA
   args:
   - --smoketest
   - --alsologtostderr
 
 # Push the image with tags.
 images:
-- ${_REGISTRY}/slack:${TAG_NAME}
-- ${_REGISTRY}/slack:${_MAJOR_LATEST}
-- ${_REGISTRY}/slack:latest
-
-options:
-  dynamic_substitutions: true
-
-substitutions:
-  _REGISTRY: us-east1-docker.pkg.dev/gcb-release/cloud-build-notifiers
-  # Looks like: $NOTIF-$MAJOR-latest. Not meant for overriding.
-  _MAJOR_LATEST: "${TAG_NAME%%.*}-latest"
+- us-docker.pkg.dev/devops-309220/metrio/slack-build-notifier:$COMMIT_SHA
 
 tags:
 - cloud-build-notifiers-slack
-- slack-${TAG_NAME}
