@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
@@ -80,18 +81,25 @@ func (s *slackNotifier) SendNotification(ctx context.Context, build *cbpb.Build)
 
 func (s *slackNotifier) writeMessage(build *cbpb.Build) (*slack.WebhookMessage, error) {
 	txt := fmt.Sprintf(
-		"Cloud Build (%s, %s): %s",
-		build.ProjectId,
+		"%s for build (%s, %s)",
+		build.StatusDetail,
+		extractBuildName(build.Name),
 		build.Id,
-		build.Status,
 	)
 
 	var clr string
 	switch build.Status {
 	case cbpb.Build_SUCCESS:
 		clr = "good"
-	case cbpb.Build_FAILURE, cbpb.Build_INTERNAL_ERROR, cbpb.Build_TIMEOUT:
+	case cbpb.Build_FAILURE:
 		clr = "danger"
+		txt = fmt.Sprintf(":facepalm: %s with %s", txt, build.FailureInfo.Detail)
+	case cbpb.Build_TIMEOUT:
+		clr = "danger"
+		txt = fmt.Sprintf(":fidget_spinner: %s", txt)
+	case cbpb.Build_INTERNAL_ERROR:
+		clr = "danger"
+		txt = fmt.Sprintf(":explode: %s", txt)
 	default:
 		clr = "warning"
 	}
@@ -112,4 +120,8 @@ func (s *slackNotifier) writeMessage(build *cbpb.Build) (*slack.WebhookMessage, 
 	}
 
 	return &slack.WebhookMessage{Attachments: []slack.Attachment{atch}}, nil
+}
+
+func extractBuildName(longName string) string {
+	return strings.Split(longName, "/")[5]
 }
