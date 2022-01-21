@@ -1,0 +1,16 @@
+apiVersion: cloud-build-notifiers/v1
+kind: PagerDutyIncidentNotifier
+metadata:
+  name: example-pagerduty-incident-notifier
+spec:
+  notification:
+    filter: build.status == Build.Status.FAILURE
+    delivery:
+      incidentCreationEndpoint: "https://api.pagerduty.com/incidents"
+      incidentTitle: "Something is on fire somewhere!"
+      serviceID: "ABC1234"
+      pagerDutyAPIToken:
+        secretRef: pagerduty-api-token
+  secrets:
+  - name: pagerduty-api-token
+    value: projects/some_project_ref_1234/secrets/secret_name_goes_here/versions/latest
