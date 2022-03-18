@@ -78,9 +78,12 @@ func (g *googlechatNotifier) SendNotification(ctx context.Context, build *cbpb.B
 	if err != nil {
 		return fmt.Errorf("failed to write Google Chat message: %w", err)
 	}
-	//TODO(glasnt) unsure if this is best practice.
+
 	payload := new(bytes.Buffer)
-	json.NewEncoder(payload).Encode(msg)
+	err = json.NewEncoder(payload).Encode(msg)
+	if err != nil {
+		return fmt.Errorf("failed to encode payload: %w", err)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, g.webhookURL, payload)
 	if err != nil {
