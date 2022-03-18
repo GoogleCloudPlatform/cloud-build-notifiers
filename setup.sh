@@ -58,7 +58,7 @@ main() {
   # Check that the user is using a supported notifier type in the correct
   # directory.
   case "${NOTIFIER_TYPE}" in
-  http | smtp | slack | bigquery) ;;
+  http | smtp | slack | bigquery | googlechat) ;;
   *) fail "${HELP}" ;;
   esac
 
