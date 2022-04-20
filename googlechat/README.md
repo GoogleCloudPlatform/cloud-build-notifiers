@@ -15,4 +15,4 @@ see [Configuring Google Chat notifications](https://cloud.google.com/cloud-build
 This notifier expects the following fields in the `delivery` map to be set:
 
 - `webhook_url`: The `secretRef: <GoogleChat-webhook-URL>` map that references the
-Slack webhook URL resource path in the `secrets` section.
+Google Chat webhook URL resource path in the `secrets` section.
