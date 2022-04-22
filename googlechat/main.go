@@ -170,8 +170,21 @@ func (g *googlechatNotifier) writeMessage(build *cbpb.Build) (*chat.Message, err
 
 		repo_name := build.Substitutions["REPO_NAME"]
 		trigger_name := build.Substitutions["TRIGGER_NAME"]
-		branch_name := build.Substitutions["BRANCH_NAME"]
 		commit := build.Substitutions["SHORT_SHA"]
+
+		// Branch, Tag, or None.
+		branch_tag_label := "Branch"
+		branch_tag_value := build.Substitutions["BRANCH_NAME"]
+
+		if branch_tag_value == "" {
+			branch_tag_label = "Tag"
+			branch_tag_value = build.Substitutions["TAG_NAME"]
+
+			if branch_tag_value == "" {
+				branch_tag_label = "Branch/Tag"
+				branch_tag_value = "[no branch or tag]"
+			}
+		}
 
 		card.Header.Subtitle = fmt.Sprintf("%s on %s", trigger_name, build.ProjectId)
 
@@ -179,7 +192,6 @@ func (g *googlechatNotifier) writeMessage(build *cbpb.Build) (*chat.Message, err
 			Header: "Trigger information",
 			Widgets: []*chat.WidgetMarkup{
 				{
-
 					KeyValue: &chat.KeyValue{
 						TopLabel: "Trigger",
 						Content:  trigger_name,
@@ -187,14 +199,14 @@ func (g *googlechatNotifier) writeMessage(build *cbpb.Build) (*chat.Message, err
 				},
 				{
 					KeyValue: &chat.KeyValue{
-						TopLabel: `Repo`,
+						TopLabel: "Repo",
 						Content:  repo_name,
 					},
 				},
 				{
 					KeyValue: &chat.KeyValue{
-						TopLabel: "Branch",
-						Content:  branch_name,
+						TopLabel: branch_tag_label,
+						Content:  branch_tag_value,
 					},
 				},
 				{
