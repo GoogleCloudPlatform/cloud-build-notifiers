@@ -1,0 +1,25 @@
+steps:
+- # Build the binary and put it into the builder image.
+  name: gcr.io/cloud-builders/docker
+  args: ['build', '--tag=gcr.io/$PROJECT_ID/aricz-template-notifier', '.']
+
+- # Push the container image to Container Registry
+  name: gcr.io/cloud-builders/docker
+  args: ['push', 'gcr.io/$PROJECT_ID/aricz-template-notifier']
+
+- # Deploy to Cloud Run
+  name: google/cloud-sdk
+  args: 
+    - gcloud
+    - run
+    - deploy
+    - aricz-template-notifier
+    - --platform=managed
+    - --region=us-central1
+    - --image=gcr.io/$PROJECT_ID/aricz-template-notifier
+    - --no-allow-unauthenticated
+    - --update-env-vars=CONFIG_PATH=${_CONFIG_PATH}
+
+# Push the image with tags.
+images:
+- gcr.io/$PROJECT_ID/aricz-template-notifier
