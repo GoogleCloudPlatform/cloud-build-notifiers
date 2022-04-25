@@ -83,7 +83,25 @@ type Spec struct {
 type Notification struct {
 	Filter        string                 `yaml:"filter"`
 	Delivery      map[string]interface{} `yaml:"delivery"`
-	Substitutions map[string]string      `yaml:"substitutions"`
+	Substitutions map[string]string      `yaml:"params"`
+	Template      *Template              `yaml:"template"`
+}
+
+type Template struct {
+	Type    string `yaml:"type"`
+	URI     string `yaml:"uri"`
+	Content string `yaml:"content"`
+}
+
+// TemplateView is the data container for the fields relevant to rendering a template
+type TemplateView struct {
+	Build  *BuildView
+	Params map[string]string
+}
+
+// BuildView is the data container that contains the build
+type BuildView struct {
+	*cbpb.Build
 }
 
 // SecretConfig is the data container used in a Spec.Notification config for referencing a secret in the Spec.Secrets list.
@@ -346,11 +364,11 @@ func validateConfig(cfg *Config) error {
 		return errors.New("expected config.spec.notification to be present")
 	}
 
-	for n := range cfg.Spec.Notification.Substitutions {
-		if !subNamePattern.MatchString(n) {
-			return fmt.Errorf("expected user-defined substitution %q to match pattern %v", n, subNamePattern)
-		}
-	}
+	// for n := range cfg.Spec.Notification.Substitutions {
+	// 	if !subNamePattern.MatchString(n) {
+	// 		return fmt.Errorf("expected user-defined substitution %q to match pattern %v", n, subNamePattern)
+	// 	}
+	// }
 
 	return nil
 }

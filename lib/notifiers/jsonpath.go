@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"regexp"
 	"strings"
 	"sync"
 
@@ -16,9 +15,9 @@ import (
 	"k8s.io/client-go/util/jsonpath"
 )
 
-var (
-	subNamePattern = regexp.MustCompile("^_[A-Z][0-9A-Z_]*$")
-)
+// var (
+// 	subNamePattern = regexp.MustCompile("(^[^A-Z]*|[A-Z]*)([A-Z][^A-Z]+|$)")
+// )
 
 // BindingResolver is an object that given a Build and a way to get secrets, returns all bound substitutions from the
 // notifier configuration.
@@ -40,9 +39,9 @@ type jpResolver struct {
 func newResolver(cfg *Config) (BindingResolver, error) {
 	jps := map[string]*inputAndJSONPath{}
 	for name, path := range cfg.Spec.Notification.Substitutions {
-		if !subNamePattern.MatchString(name) {
-			return nil, fmt.Errorf("expected name %q to match pattern %v", name, subNamePattern)
-		}
+		// if !subNamePattern.MatchString(name) {
+		// 	return nil, fmt.Errorf("expected name %q to match pattern %v", name, subNamePattern)
+		// }
 		p, err := makeJSONPath(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to derive substitution path from %q: %v", path, err)
