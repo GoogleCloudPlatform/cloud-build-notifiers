@@ -81,10 +81,10 @@ type Spec struct {
 
 // Notification is the data container for the fields that are relevant to the configuration of sending the notification.
 type Notification struct {
-	Filter        string                 `yaml:"filter"`
-	Delivery      map[string]interface{} `yaml:"delivery"`
-	Substitutions map[string]string      `yaml:"params"`
-	Template      *Template              `yaml:"template"`
+	Filter   string                 `yaml:"filter"`
+	Delivery map[string]interface{} `yaml:"delivery"`
+	Params   map[string]string      `yaml:"params"`
+	Template *Template              `yaml:"template"`
 }
 
 type Template struct {

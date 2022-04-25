@@ -255,7 +255,7 @@ spec:
       other_key: [404, 505]
 	  third_key:
 		foo: bar
-    substitutions:
+    params:
       _SOME_SUBST: $(build['_SOME_SUBST'])
       _SOME_SECRET: $(secrets['some-secret'])
   secrets:
@@ -277,7 +277,7 @@ var validConfig = &Config{
 				"other_key": []interface{}{int(404), int(505)},
 				"third_key": map[interface{}]interface{}{string("foo"): string("bar")},
 			},
-			Substitutions: map[string]string{
+			Params: map[string]string{
 				"_SOME_SUBST":  "$(build['_SOME_SUBST'])",
 				"_SOME_SECRET": "$(secrets['some-secret'])",
 			},
@@ -547,20 +547,21 @@ func TestValidateConfig(t *testing.T) {
 				Spec:       &Spec{},
 			},
 			wantErr: true,
-		}, {
-			name: "subst name with no underscore",
-			cfg: &Config{
-				APIVersion: "cloud-build-notifiers/v1",
-				Spec: &Spec{
-					Notification: &Notification{
-						Substitutions: map[string]string{
-							"FOO": "$(build.id)",
-						},
-					},
-				},
-			},
-			wantErr: true,
 		},
+		// {
+		// 	name: "subst name with no underscore",
+		// 	cfg: &Config{
+		// 		APIVersion: "cloud-build-notifiers/v1",
+		// 		Spec: &Spec{
+		// 			Notification: &Notification{
+		// 				Params: map[string]string{
+		// 					"FOO": "$(build.id)",
+		// 				},
+		// 			},
+		// 		},
+		// 	},
+		// 	wantErr: true,
+		// },
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := validateConfig(tc.cfg)

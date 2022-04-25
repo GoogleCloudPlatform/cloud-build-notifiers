@@ -38,7 +38,7 @@ type jpResolver struct {
 
 func newResolver(cfg *Config) (BindingResolver, error) {
 	jps := map[string]*inputAndJSONPath{}
-	for name, path := range cfg.Spec.Notification.Substitutions {
+	for name, path := range cfg.Spec.Notification.Params {
 		// if !subNamePattern.MatchString(name) {
 		// 	return nil, fmt.Errorf("expected name %q to match pattern %v", name, subNamePattern)
 		// }
