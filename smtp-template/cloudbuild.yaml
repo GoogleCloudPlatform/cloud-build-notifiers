@@ -1,7 +1,7 @@
 steps:
 - # Build the binary and put it into the builder image.
   name: gcr.io/cloud-builders/docker
-  args: ['build', '--tag=gcr.io/$PROJECT_ID/aricz-template-notifier', '.']
+  args: ['build', '--file=./smtp-template/Dockerfile','--tag=gcr.io/$PROJECT_ID/aricz-template-notifier', '.']
 
 - # Push the container image to Container Registry
   name: gcr.io/cloud-builders/docker

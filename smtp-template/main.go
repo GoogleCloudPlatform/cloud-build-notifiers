@@ -37,6 +37,7 @@ func main() {
 	if err := notifiers.Main(new(smtpNotifier)); err != nil {
 		log.Fatalf("fatal error: %v", err)
 	}
+
 }
 
 type smtpNotifier struct {
@@ -51,6 +52,7 @@ type mailConfig struct {
 }
 
 func (s *smtpNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg notifiers.SecretGetter, _ notifiers.BindingResolver) error {
+	log.Info("SMTP_TEMPLATE STARTED")
 	prd, err := notifiers.MakeCELPredicate(cfg.Spec.Notification.Filter)
 	if err != nil {
 		return fmt.Errorf("failed to create CELPredicate: %w", err)
