@@ -3,6 +3,7 @@
 ## Brandfolder Fork
 ### Development Flow
 ...
+![Cloud Build Diagram](https://cdn.bfldr.com/E1ZI75Y3/at/4sp4v8ftmhmg26pj7wb8jbcm/cloud-build-notifiers_Build_Run.png?auto=webp&format=png)
 
 ## Google README
 

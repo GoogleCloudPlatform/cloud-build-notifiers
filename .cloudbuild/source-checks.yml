@@ -1,6 +1,6 @@
 steps:
   - id: gokart
-    name: golang
+    name: golang:1.16
     entrypoint: 'bash'
     args:
      - -c
@@ -14,7 +14,7 @@ steps:
     waitFor: ['-']
 
   - id: gofmt
-    name: golang
+    name: golang:1.16
     entrypoint: 'bash'
     args:
      - -c 
