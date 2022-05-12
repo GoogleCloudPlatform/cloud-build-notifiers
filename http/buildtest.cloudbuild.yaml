@@ -20,4 +20,4 @@ steps:
   - '.'
 
 tags:
-- cloud-build-notifiers-http
+- cloud-build-notifiers-http-template

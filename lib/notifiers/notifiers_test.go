@@ -346,6 +346,69 @@ func TestGetGCSConfig(t *testing.T) {
 	}
 }
 
+func TestGetGCSTemplate(t *testing.T) {
+	validTemplate := `
+		SomeTemplate {{.buildStatus}}
+	`
+	validFakeFactory := &fakeGCSReaderFactory{
+		data: map[string]string{
+			"gs://path/to/my/template": validTemplate,
+		},
+	}
+
+	for _, tc := range []struct {
+		name         string
+		path         string
+		fake         *fakeGCSReaderFactory
+		wantError    bool
+		wantTemplate string
+	}{
+		{
+			name:         "valid and present template",
+			path:         "gs://path/to/my/template",
+			fake:         validFakeFactory,
+			wantTemplate: validTemplate,
+		}, {
+			name:      "bad path",
+			path:      "gs://path/to/nowhere",
+			fake:      validFakeFactory,
+			wantError: true,
+		}, {
+			name: "bad template",
+			path: "gs://path/to/my/template",
+			fake: &fakeGCSReaderFactory{
+				data: map[string]string{
+					"gs://path/to/my/config.yaml": `blahBADdata {{}}`,
+				},
+			},
+			wantError: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gotTemplate, err := getGCSTemplate(context.Background(), tc.fake, tc.path)
+			if err != nil {
+				if tc.wantError {
+					t.Logf("got expected error: %v", err)
+					return
+				}
+				t.Fatalf("getGCSTemplate(%q) failed: %v", tc.path, err)
+			}
+			if validateTemplate(gotTemplate) != nil && tc.wantError {
+				t.Logf("got expected error: %v", err)
+				return
+			}
+
+			if tc.wantError {
+				t.Fatalf("getGCSTemplate(%q) succeeded unexpectedly: %v", tc.path, err)
+			}
+
+			if diff := cmp.Diff(tc.wantTemplate, gotTemplate); diff != "" {
+				t.Fatalf("getGCSTemplate(%q) produced unexpected template diff: (want- got+)\n%s", tc.path, diff)
+			}
+		})
+	}
+}
+
 func TestGetSecretRef(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
@@ -585,7 +648,7 @@ type fakeNotifier struct {
 	notifs chan *cbpb.Build
 }
 
-func (f *fakeNotifier) SetUp(_ context.Context, _ *Config, _ SecretGetter, _ BindingResolver) error {
+func (f *fakeNotifier) SetUp(_ context.Context, _ *Config, _ string, _ SecretGetter, _ BindingResolver) error {
 	// Not currently called by any test.
 	return nil
 }
@@ -651,7 +714,7 @@ type errNotifier struct {
 	err error
 }
 
-func (n *errNotifier) SetUp(_ context.Context, _ *Config, _ SecretGetter, _ BindingResolver) error {
+func (n *errNotifier) SetUp(_ context.Context, _ *Config, _ string, _ SecretGetter, _ BindingResolver) error {
 	return nil
 }
 func (n *errNotifier) SendNotification(_ context.Context, _ *cbpb.Build) error {
@@ -726,7 +789,7 @@ type fatalNotifier struct {
 	t *testing.T
 }
 
-func (n *fatalNotifier) SetUp(_ context.Context, _ *Config, _ SecretGetter, _ BindingResolver) error {
+func (n *fatalNotifier) SetUp(_ context.Context, _ *Config, _ string, _ SecretGetter, _ BindingResolver) error {
 	return nil
 }
 func (n *fatalNotifier) SendNotification(_ context.Context, b *cbpb.Build) error {

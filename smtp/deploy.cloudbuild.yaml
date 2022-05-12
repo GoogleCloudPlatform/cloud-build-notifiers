@@ -13,11 +13,35 @@
 # limitations under the License.
 
 steps:
+# Build the binary and put it into the builder image.
 - name: gcr.io/cloud-builders/docker
   args:
   - build
+  - --tag=${_REGISTRY}/smtp:${TAG_NAME}
+  - --tag=${_REGISTRY}/smtp:${_MAJOR_LATEST}
+  - --tag=${_REGISTRY}/smtp:latest
   - --file=./smtp/Dockerfile
   - '.'
+# Run the smoketest to verify that everything built correctly.
+- name: ${_REGISTRY}/smtp:${TAG_NAME}
+  args:
+  - --smoketest
+  - --alsologtostderr
+
+# Push the image with tags.
+images:
+- ${_REGISTRY}/smtp:${TAG_NAME}
+- ${_REGISTRY}/smtp:${_MAJOR_LATEST}
+- ${_REGISTRY}/smtp:latest
+
+options:
+  dynamic_substitutions: true
+
+substitutions:
+  _REGISTRY: us-east1-docker.pkg.dev/gcb-release/cloud-build-notifiers
+  # Looks like: $NOTIF-$MAJOR-latest. Not meant for overriding.
+  _MAJOR_LATEST: "${TAG_NAME%%.*}-latest"
 
 tags:
 - cloud-build-notifiers-smtp
+- smtp-${TAG_NAME}

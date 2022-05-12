@@ -94,7 +94,7 @@ func TestSetUp(t *testing.T) {
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			n := new(httpNotifier)
-			err := n.SetUp(context.Background(), tc.cfg, nil, nil)
+			err := n.SetUp(context.Background(), tc.cfg, "", nil, nil)
 			if err != nil {
 				if tc.wantErr {
 					t.Logf("got expected error: %v", err)

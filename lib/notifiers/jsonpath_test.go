@@ -33,22 +33,19 @@ func TestNewResolverErrors(t *testing.T) {
 		name   string
 		substs map[string]string
 	}{
-		// {
-		// name: "no underscore prefix subst name",
-		// substs: map[string]string{
-		// 	"PIZZA": "$(foo.bar[2])",
-		// },
 		{
 			name: "bad JSONPath",
 			substs: map[string]string{
-				"_PIZZA": "$(])",
+				"PIZZA": "$(])",
 			},
-		}, {
+		},
+		{
 			name: "no enclosing $()",
 			substs: map[string]string{
-				"_PIZZA": "hello.goodbye",
+				"PIZZA": "hello.goodbye",
 			},
-		}} {
+		},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := &Config{
 				Spec: &Spec{
@@ -97,7 +94,6 @@ func TestResolve(t *testing.T) {
 		"_BUILD_STATUS":        "$(build.status)",
 		"_BRANCH_NAME":         "$(build.substitutions.BRANCH_NAME)",
 		"_COMMIT_AUTHOR_EMAIL": "$(build.substitutions._COMMIT_AUTHOR_EMAIL)",
-		"_SOME_PASSWORD":       "$(secrets.some-password)",
 		"_ALL_STEPS":           "$(build.steps[*].name)",
 		"_MY_TRIGGER_ID":       "$(build.build_trigger_id)",
 	}
@@ -135,12 +131,11 @@ func TestResolve(t *testing.T) {
 	}
 
 	wantResolved := map[string]string{
-		"$_BRANCH_NAME":         "my-branch",
-		"$_BUILD_STATUS":        "SUCCESS",
-		"$_COMMIT_AUTHOR_EMAIL": "me@example.com",
-		"$_SOME_PASSWORD":       "top-secret",
-		"$_ALL_STEPS":           "foo bar baz",
-		"$_MY_TRIGGER_ID":       "",
+		"_BRANCH_NAME":         "my-branch",
+		"_BUILD_STATUS":        "SUCCESS",
+		"_COMMIT_AUTHOR_EMAIL": "me@example.com",
+		"_ALL_STEPS":           "foo bar baz",
+		"_MY_TRIGGER_ID":       "",
 	}
 
 	if diff := cmp.Diff(wantResolved, gotResolved); diff != "" {
