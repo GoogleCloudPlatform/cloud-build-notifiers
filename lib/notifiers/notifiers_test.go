@@ -611,20 +611,6 @@ func TestValidateConfig(t *testing.T) {
 			},
 			wantErr: true,
 		},
-		// {
-		// 	name: "subst name with no underscore",
-		// 	cfg: &Config{
-		// 		APIVersion: "cloud-build-notifiers/v1",
-		// 		Spec: &Spec{
-		// 			Notification: &Notification{
-		// 				Params: map[string]string{
-		// 					"FOO": "$(build.id)",
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// 	wantErr: true,
-		// },
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := validateConfig(tc.cfg)

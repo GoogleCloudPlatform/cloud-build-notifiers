@@ -366,7 +366,6 @@ func getGCSConfig(ctx context.Context, grf gcsReaderFactory, path string) (*Conf
 
 // getGCSConfig fetches the Template file from the given GCS path and returns the parsed Config.
 func getGCSTemplate(ctx context.Context, grf gcsReaderFactory, path string) (string, error) {
-	log.Info("Entering get GCS Template")
 	if trm := strings.TrimPrefix(path, "gs://"); trm != path {
 		// path started with the prefix
 		path = trm
