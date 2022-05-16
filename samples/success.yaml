@@ -16,4 +16,10 @@
 steps:
   - name: busybox
     args: ["true"]
+
+substitutions:
+  _TAG: testing
+  
+tags:
+  - $_TAG
 # [END cloudbuild_samples_success]
