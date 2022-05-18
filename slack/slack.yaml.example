@@ -19,6 +19,10 @@ metadata:
 spec:
   notification:
     filter: build.status == Build.Status.SUCCESS
+    template:
+      type: golang
+      uri: gs://path/to/my/slack.json
+    
     delivery:
       webhookUrl:
         secretRef: webhook-url
