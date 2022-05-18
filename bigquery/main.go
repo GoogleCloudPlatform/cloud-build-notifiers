@@ -152,7 +152,7 @@ func imageManifestToBuildImage(image string) (*buildImage, error) {
 	return &buildImage{SHA: sha.String(), ContainerSizeMB: containerSize}, nil
 }
 
-func (n *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ notifiers.SecretGetter, _ notifiers.BindingResolver) error {
+func (n *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ string, _ notifiers.SecretGetter, _ notifiers.BindingResolver) error {
 	prd, err := notifiers.MakeCELPredicate(cfg.Spec.Notification.Filter)
 	if err != nil {
 		return fmt.Errorf("failed to make a CEL predicate: %v", err)

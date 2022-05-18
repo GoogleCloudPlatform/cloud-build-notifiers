@@ -38,7 +38,7 @@ type httpNotifier struct {
 	url    string
 }
 
-func (h *httpNotifier) SetUp(_ context.Context, cfg *notifiers.Config, _ notifiers.SecretGetter, _ notifiers.BindingResolver) error {
+func (h *httpNotifier) SetUp(_ context.Context, cfg *notifiers.Config, _ string, _ notifiers.SecretGetter, _ notifiers.BindingResolver) error {
 	prd, err := notifiers.MakeCELPredicate(cfg.Spec.Notification.Filter)
 	if err != nil {
 		return fmt.Errorf("failed to create CELPredicate: %w", err)

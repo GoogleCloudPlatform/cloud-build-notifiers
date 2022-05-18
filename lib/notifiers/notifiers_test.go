@@ -255,7 +255,11 @@ spec:
       other_key: [404, 505]
 	  third_key:
 		foo: bar
-    substitutions:
+	template:
+		type: golang
+		uri: gs://bucket/path/to/some/template
+		content: "{{.Build.Status}}"
+    params:
       _SOME_SUBST: $(build['_SOME_SUBST'])
       _SOME_SECRET: $(secrets['some-secret'])
   secrets:
@@ -277,7 +281,12 @@ var validConfig = &Config{
 				"other_key": []interface{}{int(404), int(505)},
 				"third_key": map[interface{}]interface{}{string("foo"): string("bar")},
 			},
-			Substitutions: map[string]string{
+			Template: &Template{
+				Type:    "golang",
+				URI:     "gs://bucket/path/to/some/template",
+				Content: "{{.Build.Status}}",
+			},
+			Params: map[string]string{
 				"_SOME_SUBST":  "$(build['_SOME_SUBST'])",
 				"_SOME_SECRET": "$(secrets['some-secret'])",
 			},
@@ -341,6 +350,69 @@ func TestGetGCSConfig(t *testing.T) {
 
 			if diff := cmp.Diff(tc.wantConfig, gotConfig); diff != "" {
 				t.Fatalf("getGCSConfig(%q) produced unexpected Config diff: (want- got+)\n%s", tc.path, diff)
+			}
+		})
+	}
+}
+
+func TestGetGCSTemplate(t *testing.T) {
+	validTemplate := `
+		SomeTemplate {{.buildStatus}}
+	`
+	validFakeFactory := &fakeGCSReaderFactory{
+		data: map[string]string{
+			"gs://path/to/my/template": validTemplate,
+		},
+	}
+
+	for _, tc := range []struct {
+		name         string
+		path         string
+		fake         *fakeGCSReaderFactory
+		wantError    bool
+		wantTemplate string
+	}{
+		{
+			name:         "valid and present template",
+			path:         "gs://path/to/my/template",
+			fake:         validFakeFactory,
+			wantTemplate: validTemplate,
+		}, {
+			name:      "bad path",
+			path:      "gs://path/to/nowhere",
+			fake:      validFakeFactory,
+			wantError: true,
+		}, {
+			name: "bad template",
+			path: "gs://path/to/my/template",
+			fake: &fakeGCSReaderFactory{
+				data: map[string]string{
+					"gs://path/to/my/config.yaml": `blahBADdata {{}}`,
+				},
+			},
+			wantError: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gotTemplate, err := getGCSTemplate(context.Background(), tc.fake, tc.path)
+			if err != nil {
+				if tc.wantError {
+					t.Logf("got expected error: %v", err)
+					return
+				}
+				t.Fatalf("getGCSTemplate(%q) failed: %v", tc.path, err)
+			}
+			if validateTemplate(gotTemplate) != nil && tc.wantError {
+				t.Logf("got expected error: %v", err)
+				return
+			}
+
+			if tc.wantError {
+				t.Fatalf("getGCSTemplate(%q) succeeded unexpectedly: %v", tc.path, err)
+			}
+
+			if diff := cmp.Diff(tc.wantTemplate, gotTemplate); diff != "" {
+				t.Fatalf("getGCSTemplate(%q) produced unexpected template diff: (want- got+)\n%s", tc.path, diff)
 			}
 		})
 	}
@@ -547,19 +619,6 @@ func TestValidateConfig(t *testing.T) {
 				Spec:       &Spec{},
 			},
 			wantErr: true,
-		}, {
-			name: "subst name with no underscore",
-			cfg: &Config{
-				APIVersion: "cloud-build-notifiers/v1",
-				Spec: &Spec{
-					Notification: &Notification{
-						Substitutions: map[string]string{
-							"FOO": "$(build.id)",
-						},
-					},
-				},
-			},
-			wantErr: true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -584,7 +643,7 @@ type fakeNotifier struct {
 	notifs chan *cbpb.Build
 }
 
-func (f *fakeNotifier) SetUp(_ context.Context, _ *Config, _ SecretGetter, _ BindingResolver) error {
+func (f *fakeNotifier) SetUp(_ context.Context, _ *Config, _ string, _ SecretGetter, _ BindingResolver) error {
 	// Not currently called by any test.
 	return nil
 }
@@ -650,7 +709,7 @@ type errNotifier struct {
 	err error
 }
 
-func (n *errNotifier) SetUp(_ context.Context, _ *Config, _ SecretGetter, _ BindingResolver) error {
+func (n *errNotifier) SetUp(_ context.Context, _ *Config, _ string, _ SecretGetter, _ BindingResolver) error {
 	return nil
 }
 func (n *errNotifier) SendNotification(_ context.Context, _ *cbpb.Build) error {
@@ -725,7 +784,7 @@ type fatalNotifier struct {
 	t *testing.T
 }
 
-func (n *fatalNotifier) SetUp(_ context.Context, _ *Config, _ SecretGetter, _ BindingResolver) error {
+func (n *fatalNotifier) SetUp(_ context.Context, _ *Config, _ string, _ SecretGetter, _ BindingResolver) error {
 	return nil
 }
 func (n *fatalNotifier) SendNotification(_ context.Context, b *cbpb.Build) error {
@@ -754,4 +813,77 @@ func TestReceiverWithIgnoredBadMessage(t *testing.T) {
 	if s := w.Result().StatusCode; s != http.StatusOK {
 		t.Errorf("result.StatusCode = %d, expected %d", s, http.StatusOK)
 	}
+}
+
+func TestParseTemplate(t *testing.T) {
+	ctx := context.Background()
+	validFakeFactory := &fakeGCSReaderFactory{
+		data: map[string]string{
+			"gs://path/to/my/template.yaml": "{{.Build.Status}}",
+		},
+	}
+	for _, tc := range []struct {
+		name    string
+		tmpl    *Template
+		want    string
+		wantErr bool
+	}{
+		{
+			name: "valid uri",
+			tmpl: &Template{
+				Type: "golang",
+				URI:  "gs://path/to/my/template.yaml",
+			},
+			want: "{{.Build.Status}}",
+		}, {
+			name: "valid content",
+			tmpl: &Template{
+				Type:    "golang",
+				Content: "{{.Build.Status}}",
+			},
+			want: "{{.Build.Status}}",
+		}, {
+			name: "invalid URI",
+			tmpl: &Template{
+				Type: "golang",
+				URI:  "gs://path/to/my/wrong.yaml",
+			},
+			wantErr: true,
+		}, {
+			name: "invalid template",
+			tmpl: &Template{
+				Type:    "golang",
+				Content: "{{something}",
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid type",
+			tmpl: &Template{
+				Type: "mustache",
+				URI:  "gs://path/to/my/template.yaml",
+			},
+			wantErr: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseTemplate(ctx, tc.tmpl, validFakeFactory)
+			if err != nil {
+				if !tc.wantErr {
+					t.Fatalf("parseTemplate(%v) got unexpected error: %v", tc.tmpl, err)
+				} else {
+					t.Logf("got expected error: %v", err)
+					return
+				}
+			}
+			if got != tc.want {
+				t.Fatalf("parseTemplate(%v)=%v, want: %v", tc.tmpl, got, tc.want)
+			}
+
+			if tc.wantErr {
+				t.Fatalf("validateConfig(%v) unexpectedly succeeded", tc.tmpl)
+			}
+		})
+	}
+
 }

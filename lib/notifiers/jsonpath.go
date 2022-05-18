@@ -7,17 +7,12 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"regexp"
 	"strings"
 	"sync"
 
 	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 	"k8s.io/client-go/third_party/forked/golang/template"
 	"k8s.io/client-go/util/jsonpath"
-)
-
-var (
-	subNamePattern = regexp.MustCompile("^_[A-Z][0-9A-Z_]*$")
 )
 
 // BindingResolver is an object that given a Build and a way to get secrets, returns all bound substitutions from the
@@ -39,10 +34,7 @@ type jpResolver struct {
 
 func newResolver(cfg *Config) (BindingResolver, error) {
 	jps := map[string]*inputAndJSONPath{}
-	for name, path := range cfg.Spec.Notification.Substitutions {
-		if !subNamePattern.MatchString(name) {
-			return nil, fmt.Errorf("expected name %q to match pattern %v", name, subNamePattern)
-		}
+	for name, path := range cfg.Spec.Notification.Params {
 		p, err := makeJSONPath(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to derive substitution path from %q: %v", path, err)
@@ -67,22 +59,10 @@ func (j *jpResolver) Resolve(ctx context.Context, sg SecretGetter, build *cbpb.B
 	j.mtx.RLock()
 	defer j.mtx.RUnlock()
 
-	// Fetch all of the secrets that might appear in the given paths.
-	// TODO(ljr): We can try to be clever and only use the ones that are mentioned in the user-provided paths.
-	sm := map[string]string{}
-	for _, s := range j.cfg.Spec.Secrets {
-		sv, err := sg.GetSecret(ctx, s.ResourceName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get secret value for resource %q: %v", s.ResourceName, err)
-		}
-		sm[s.LocalName] = sv
-	}
-
 	// Use a "JSON" payload here since a struct would have export-field issues
 	// based on the lowercase names.
 	pld := map[string]interface{}{
-		"build":   build,
-		"secrets": sm,
+		"build": build,
 	}
 
 	ret := map[string]string{}
@@ -102,7 +82,7 @@ func (j *jpResolver) Resolve(ctx context.Context, sg SecretGetter, build *cbpb.B
 				return nil, err
 			}
 		}
-		ret["$"+name] = buf.String()
+		ret[name] = buf.String()
 	}
 	return ret, nil
 }

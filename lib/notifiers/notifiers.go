@@ -15,16 +15,19 @@
 package notifiers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"html/template"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -52,12 +55,19 @@ var (
 	allowedYAMLAPIVersions = map[string]bool{
 		"cloud-build-notifiers/v1": true,
 	}
+	allowedTemplateTypes = map[string]bool{
+		"golang": true,
+	}
 )
 
 // Flags.
 var (
 	smoketest  = flag.Bool("smoketest", false, "If true, Main will simply log the notifier type and exit.")
 	setupCheck = flag.Bool("setup_check", false, "If true, the configuration YAML is read from stdin and notifier.SetUp is called in a faked-out way. The smoketest flag takes priority over this one.")
+)
+
+var (
+	gcsConfigPattern = regexp.MustCompile(`^gs://([[\w-]+)/([^\\]+$)`)
 )
 
 // Config is the common type for (YAML-based) configuration files for notifications.
@@ -81,9 +91,28 @@ type Spec struct {
 
 // Notification is the data container for the fields that are relevant to the configuration of sending the notification.
 type Notification struct {
-	Filter        string                 `yaml:"filter"`
-	Delivery      map[string]interface{} `yaml:"delivery"`
-	Substitutions map[string]string      `yaml:"substitutions"`
+	Filter   string                 `yaml:"filter"`
+	Delivery map[string]interface{} `yaml:"delivery"`
+	Params   map[string]string      `yaml:"params"`
+	Template *Template              `yaml:"template"`
+}
+
+type Template struct {
+	Type    string `yaml:"type"`
+	URI     string `yaml:"uri"`
+	Content string `yaml:"content"`
+}
+
+// TemplateView is the data container for the fields relevant to rendering a template
+
+type TemplateView struct {
+	Build  *BuildView        `json:"Build"`
+	Params map[string]string `json:"Params"`
+}
+
+// BuildView is the data container that contains the build
+type BuildView struct {
+	*cbpb.Build
 }
 
 // SecretConfig is the data container used in a Spec.Notification config for referencing a secret in the Spec.Secrets list.
@@ -111,7 +140,7 @@ type pubSubPushWrapper struct {
 
 // Notifier is the interface type that users should implement for usage in Cloud Build notifiers.
 type Notifier interface {
-	SetUp(context.Context, *Config, SecretGetter, BindingResolver) error
+	SetUp(context.Context, *Config, string, SecretGetter, BindingResolver) error
 	SendNotification(context.Context, *cbpb.Build) error
 }
 
@@ -157,7 +186,6 @@ func Main(notifier Notifier) error {
 	if !flag.Parsed() {
 		flag.Parse()
 	}
-
 	if *smoketest {
 		log.V(0).Infof("notifier smoketest: %T", notifier)
 		return nil
@@ -185,7 +213,7 @@ func Main(notifier Notifier) error {
 			return fmt.Errorf("failed to create BindingResolver during setup check: %w", err)
 		}
 
-		if err := notifier.SetUp(ctx, cfg, new(setupCheckSecretGetter), br); err != nil {
+		if err := notifier.SetUp(ctx, cfg, "", new(setupCheckSecretGetter), br); err != nil {
 			return fmt.Errorf("failed to run notifier.SetUp during setup check: %w", err)
 		}
 
@@ -214,10 +242,16 @@ func Main(notifier Notifier) error {
 	if err != nil {
 		return fmt.Errorf("failed to get config from GCS: %w", err)
 	}
+
 	if err := validateConfig(cfg); err != nil {
 		return fmt.Errorf("got invalid config from path %q: %w", cfgPath, err)
 	}
 	log.V(2).Infof("got config from GCS (%q): %+v\n", cfgPath, cfg)
+
+	tmpl, err := parseTemplate(ctx, cfg.Spec.Notification.Template, &actualGCSReaderFactory{sc})
+	if err != nil {
+		return fmt.Errorf("failed to parse template from notiifer spec %q: %w", cfg.Spec.Notification.Template, err)
+	}
 
 	sm := &actualSecretManager{client: smc}
 
@@ -226,7 +260,7 @@ func Main(notifier Notifier) error {
 		return fmt.Errorf("failed to construct a binding resolver: %v", err)
 	}
 
-	if err := notifier.SetUp(ctx, cfg, sm, br); err != nil {
+	if err := notifier.SetUp(ctx, cfg, tmpl, sm, br); err != nil {
 		return fmt.Errorf("failed to call SetUp on notifier: %w", err)
 	}
 
@@ -256,6 +290,29 @@ func Main(notifier Notifier) error {
 
 	// Block on the HTTP's health.
 	return http.ListenAndServe(":"+port, nil)
+}
+
+func parseTemplate(ctx context.Context, tmpl *Template, grf gcsReaderFactory) (string, error) {
+	templateString := ""
+	if tmpl != nil {
+		if _, ok := allowedTemplateTypes[tmpl.Type]; !ok {
+			return "", fmt.Errorf("got invalid Template Type: %v", tmpl.Type)
+		}
+		if tmpl.URI != "" {
+			parsed, err := getGCSTemplate(ctx, grf, tmpl.URI)
+			if err != nil {
+				return "", fmt.Errorf("failed to get template from GCS: %w", err)
+			}
+			templateString = parsed
+		} else {
+			templateString = tmpl.Content
+		}
+		if err := validateTemplate(templateString); err != nil {
+			return "", fmt.Errorf("got invalid template from path %q: %w", tmpl.URI, err)
+		}
+	}
+	return templateString, nil
+
 }
 
 type gcsReaderFactory interface {
@@ -294,20 +351,26 @@ func (c *setupCheckSecretGetter) GetSecret(_ context.Context, name string) (stri
 
 // getGCSConfig fetches the YAML Config file from the given GCS path and returns the parsed Config.
 func getGCSConfig(ctx context.Context, grf gcsReaderFactory, path string) (*Config, error) {
-	if trm := strings.TrimPrefix(path, "gs://"); trm != path {
-		// path started with the prefix
-		path = trm
-	} else {
-		return nil, fmt.Errorf("expected %q to start with `gs://`", path)
+	if !gcsConfigPattern.MatchString(path) {
+		return nil, fmt.Errorf("expected path %q to match pattern %v", path, gcsConfigPattern)
 	}
+	// if trm := strings.TrimPrefix(path, "gs://"); trm != path {
+	// 	// path started with the prefix
+	// 	path = trm
+	// } else {
+	// 	return nil, fmt.Errorf("expected %q to start with `gs://`", path)
+	// }
 
-	split := strings.SplitN(path, "/", 2)
-	log.V(2).Infof("got path split: %+v", split)
-	if len(split) != 2 {
+	// split := strings.SplitN(path, "/", 2)
+	// log.V(2).Infof("got path split: %+v", split)
+	// if len(split) != 2 {
+	// 	return nil, fmt.Errorf("path has incorrect format (expected form: `[gs://]bucket/path/to/object`): %q => %s", path, strings.Join(split, ", "))
+	// }
+	split := gcsConfigPattern.FindStringSubmatch(path)
+	if len(split) != 3 {
 		return nil, fmt.Errorf("path has incorrect format (expected form: `[gs://]bucket/path/to/object`): %q => %s", path, strings.Join(split, ", "))
 	}
-
-	bucket, object := split[0], split[1]
+	bucket, object := split[1], split[2]
 	r, err := grf.NewReader(ctx, bucket, object)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get reader for (bucket=%q, object=%q): %w", bucket, object, err)
@@ -322,11 +385,49 @@ func getGCSConfig(ctx context.Context, grf gcsReaderFactory, path string) (*Conf
 	return cfg, nil
 }
 
+// getGCSConfig fetches the Template file from the given GCS path and returns the parsed Config.
+func getGCSTemplate(ctx context.Context, grf gcsReaderFactory, path string) (string, error) {
+	if trm := strings.TrimPrefix(path, "gs://"); trm != path {
+		// path started with the prefix
+		path = trm
+	} else {
+		return "", fmt.Errorf("expected %q to start with `gs://`", path)
+	}
+
+	split := strings.SplitN(path, "/", 2)
+	log.V(2).Infof("got path split: %+v", split)
+	if len(split) != 2 {
+		return "", fmt.Errorf("path has incorrect format (expected form: `[gs://]bucket/path/to/object`): %q => %s", path, strings.Join(split, ", "))
+	}
+
+	bucket, object := split[0], split[1]
+	r, err := grf.NewReader(ctx, bucket, object)
+	if err != nil {
+		return "", fmt.Errorf("failed to get reader for (bucket=%q, object=%q): %w", bucket, object, err)
+	}
+	defer r.Close()
+	tmpl, err := decodeTemplate(r)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse template at %q: %w", path, err)
+	}
+
+	return tmpl, nil
+}
+
 func decodeConfig(r io.Reader) (*Config, error) {
 	cfg := new(Config)
 	dcd := yaml.NewDecoder(r)
 	dcd.SetStrict(true)
 	return cfg, dcd.Decode(cfg)
+}
+
+func decodeTemplate(r io.Reader) (string, error) {
+	buf := new(bytes.Buffer)
+	_, err := buf.ReadFrom(r)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse template from Template file: %w", err)
+	}
+	return buf.String(), nil
 }
 
 // validateConfig checks the following (or errors):
@@ -346,13 +447,12 @@ func validateConfig(cfg *Config) error {
 		return errors.New("expected config.spec.notification to be present")
 	}
 
-	for n := range cfg.Spec.Notification.Substitutions {
-		if !subNamePattern.MatchString(n) {
-			return fmt.Errorf("expected user-defined substitution %q to match pattern %v", n, subNamePattern)
-		}
-	}
-
 	return nil
+}
+
+func validateTemplate(s string) error {
+	_, err := template.New("").Parse(s)
+	return err
 }
 
 // MakeCELPredicate returns a CELPredicate for the given filter string of CEL code.

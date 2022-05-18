@@ -244,7 +244,7 @@ func TestSetUp(t *testing.T) {
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			n := &bqNotifier{bqf: &fakeBQFactory{&fakeBQ{}}}
-			err := n.SetUp(context.Background(), tc.cfg, nil, nil)
+			err := n.SetUp(context.Background(), tc.cfg, "", nil, nil)
 			if err != nil {
 				if tc.wantErr {
 					t.Logf("got expected error: %v", err)
@@ -373,7 +373,7 @@ func TestEnsureFunctions(t *testing.T) {
 		}} {
 		t.Run(tc.name, func(t *testing.T) {
 			n := &bqNotifier{bqf: &fakeBQFactory{&fakeBQ{}}}
-			err := n.SetUp(context.Background(), tc.cfg, nil, nil)
+			err := n.SetUp(context.Background(), tc.cfg, "", nil, nil)
 			if err != nil {
 				if tc.wantErr {
 					t.Logf("got expected error: %v", err)
@@ -588,7 +588,7 @@ func TestSendNotification(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fakeBQ := &fakeBQ{}
 			n := &bqNotifier{bqf: &fakeBQFactory{fakeBQ}}
-			err := n.SetUp(context.Background(), tc.cfg, nil, nil)
+			err := n.SetUp(context.Background(), tc.cfg, "", nil, nil)
 			if err != nil {
 				t.Fatalf("Setup(%v) got unexpected error: %v", tc.cfg, err)
 			}
