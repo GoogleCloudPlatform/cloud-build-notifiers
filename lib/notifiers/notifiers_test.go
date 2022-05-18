@@ -255,6 +255,10 @@ spec:
       other_key: [404, 505]
 	  third_key:
 		foo: bar
+	template:
+		type: golang
+		uri: gs://bucket/path/to/some/template
+		content: "{{.Build.Status}}"
     params:
       _SOME_SUBST: $(build['_SOME_SUBST'])
       _SOME_SECRET: $(secrets['some-secret'])
@@ -276,6 +280,11 @@ var validConfig = &Config{
 				"some_key":  "some_value",
 				"other_key": []interface{}{int(404), int(505)},
 				"third_key": map[interface{}]interface{}{string("foo"): string("bar")},
+			},
+			Template: &Template{
+				Type:    "golang",
+				URI:     "gs://bucket/path/to/some/template",
+				Content: "{{.Build.Status}}",
 			},
 			Params: map[string]string{
 				"_SOME_SUBST":  "$(build['_SOME_SUBST'])",
@@ -804,4 +813,77 @@ func TestReceiverWithIgnoredBadMessage(t *testing.T) {
 	if s := w.Result().StatusCode; s != http.StatusOK {
 		t.Errorf("result.StatusCode = %d, expected %d", s, http.StatusOK)
 	}
+}
+
+func TestParseTemplate(t *testing.T) {
+	ctx := context.Background()
+	validFakeFactory := &fakeGCSReaderFactory{
+		data: map[string]string{
+			"gs://path/to/my/template.yaml": "{{.Build.Status}}",
+		},
+	}
+	for _, tc := range []struct {
+		name    string
+		tmpl    *Template
+		want    string
+		wantErr bool
+	}{
+		{
+			name: "valid uri",
+			tmpl: &Template{
+				Type: "golang",
+				URI:  "gs://path/to/my/template.yaml",
+			},
+			want: "{{.Build.Status}}",
+		}, {
+			name: "valid content",
+			tmpl: &Template{
+				Type:    "golang",
+				Content: "{{.Build.Status}}",
+			},
+			want: "{{.Build.Status}}",
+		}, {
+			name: "invalid URI",
+			tmpl: &Template{
+				Type: "golang",
+				URI:  "gs://path/to/my/wrong.yaml",
+			},
+			wantErr: true,
+		}, {
+			name: "invalid template",
+			tmpl: &Template{
+				Type:    "golang",
+				Content: "{{something}",
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid type",
+			tmpl: &Template{
+				Type: "mustache",
+				URI:  "gs://path/to/my/template.yaml",
+			},
+			wantErr: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseTemplate(ctx, tc.tmpl, validFakeFactory)
+			if err != nil {
+				if !tc.wantErr {
+					t.Fatalf("parseTemplate(%v) got unexpected error: %v", tc.tmpl, err)
+				} else {
+					t.Logf("got expected error: %v", err)
+					return
+				}
+			}
+			if got != tc.want {
+				t.Fatalf("parseTemplate(%v)=%v, want: %v", tc.tmpl, got, tc.want)
+			}
+
+			if tc.wantErr {
+				t.Fatalf("validateConfig(%v) unexpectedly succeeded", tc.tmpl)
+			}
+		})
+	}
+
 }

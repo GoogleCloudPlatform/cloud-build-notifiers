@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -63,6 +64,10 @@ var (
 var (
 	smoketest  = flag.Bool("smoketest", false, "If true, Main will simply log the notifier type and exit.")
 	setupCheck = flag.Bool("setup_check", false, "If true, the configuration YAML is read from stdin and notifier.SetUp is called in a faked-out way. The smoketest flag takes priority over this one.")
+)
+
+var (
+	gcsConfigPattern = regexp.MustCompile(`^gs://([[\w-]+)/([^\\]+$)`)
 )
 
 // Config is the common type for (YAML-based) configuration files for notifications.
@@ -242,25 +247,12 @@ func Main(notifier Notifier) error {
 		return fmt.Errorf("got invalid config from path %q: %w", cfgPath, err)
 	}
 	log.V(2).Infof("got config from GCS (%q): %+v\n", cfgPath, cfg)
-	// Get Template Logic
-	tmpl := ""
-	if cfg.Spec.Notification.Template != nil {
-		if _, ok := allowedTemplateTypes[cfg.Spec.Notification.Template.Type]; !ok {
-			return fmt.Errorf("got invalid Template Type: %v", cfg.Spec.Notification.Template.Type)
-		}
-		if cfg.Spec.Notification.Template.URI != "" {
-			tmpl, err = getGCSTemplate(ctx, &actualGCSReaderFactory{sc}, cfg.Spec.Notification.Template.URI)
-			if err != nil {
-				return fmt.Errorf("failed to get template from GCS: %w", err)
-			}
-		} else {
-			tmpl = cfg.Spec.Notification.Template.Content
-		}
-		if err := validateTemplate(tmpl); err != nil {
-			return fmt.Errorf("got invalid template from path %q: %w", cfg.Spec.Notification.Template.URI, err)
-		}
+
+	tmpl, err := parseTemplate(ctx, cfg.Spec.Notification.Template, &actualGCSReaderFactory{sc})
+	if err != nil {
+		return fmt.Errorf("failed to parse template from notiifer spec %q: %w", cfg.Spec.Notification.Template, err)
 	}
-	// Get Template Logic
+
 	sm := &actualSecretManager{client: smc}
 
 	br, err := newResolver(cfg)
@@ -300,6 +292,29 @@ func Main(notifier Notifier) error {
 	return http.ListenAndServe(":"+port, nil)
 }
 
+func parseTemplate(ctx context.Context, tmpl *Template, grf gcsReaderFactory) (string, error) {
+	templateString := ""
+	if tmpl != nil {
+		if _, ok := allowedTemplateTypes[tmpl.Type]; !ok {
+			return "", fmt.Errorf("got invalid Template Type: %v", tmpl.Type)
+		}
+		if tmpl.URI != "" {
+			parsed, err := getGCSTemplate(ctx, grf, tmpl.URI)
+			if err != nil {
+				return "", fmt.Errorf("failed to get template from GCS: %w", err)
+			}
+			templateString = parsed
+		} else {
+			templateString = tmpl.Content
+		}
+		if err := validateTemplate(templateString); err != nil {
+			return "", fmt.Errorf("got invalid template from path %q: %w", tmpl.URI, err)
+		}
+	}
+	return templateString, nil
+
+}
+
 type gcsReaderFactory interface {
 	NewReader(ctx context.Context, bucket, object string) (io.ReadCloser, error)
 }
@@ -336,20 +351,26 @@ func (c *setupCheckSecretGetter) GetSecret(_ context.Context, name string) (stri
 
 // getGCSConfig fetches the YAML Config file from the given GCS path and returns the parsed Config.
 func getGCSConfig(ctx context.Context, grf gcsReaderFactory, path string) (*Config, error) {
-	if trm := strings.TrimPrefix(path, "gs://"); trm != path {
-		// path started with the prefix
-		path = trm
-	} else {
-		return nil, fmt.Errorf("expected %q to start with `gs://`", path)
+	if !gcsConfigPattern.MatchString(path) {
+		return nil, fmt.Errorf("expected path %q to match pattern %v", path, gcsConfigPattern)
 	}
+	// if trm := strings.TrimPrefix(path, "gs://"); trm != path {
+	// 	// path started with the prefix
+	// 	path = trm
+	// } else {
+	// 	return nil, fmt.Errorf("expected %q to start with `gs://`", path)
+	// }
 
-	split := strings.SplitN(path, "/", 2)
-	log.V(2).Infof("got path split: %+v", split)
-	if len(split) != 2 {
+	// split := strings.SplitN(path, "/", 2)
+	// log.V(2).Infof("got path split: %+v", split)
+	// if len(split) != 2 {
+	// 	return nil, fmt.Errorf("path has incorrect format (expected form: `[gs://]bucket/path/to/object`): %q => %s", path, strings.Join(split, ", "))
+	// }
+	split := gcsConfigPattern.FindStringSubmatch(path)
+	if len(split) != 3 {
 		return nil, fmt.Errorf("path has incorrect format (expected form: `[gs://]bucket/path/to/object`): %q => %s", path, strings.Join(split, ", "))
 	}
-
-	bucket, object := split[0], split[1]
+	bucket, object := split[1], split[2]
 	r, err := grf.NewReader(ctx, bucket, object)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get reader for (bucket=%q, object=%q): %w", bucket, object, err)
