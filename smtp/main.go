@@ -18,10 +18,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"html/template"
 	"mime/quotedprintable"
 	"net/smtp"
 	"strings"
-	"text/template"
 
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
@@ -40,9 +40,11 @@ func main() {
 }
 
 type smtpNotifier struct {
-	filter notifiers.EventFilter
-	tmpl   *template.Template
-	mcfg   mailConfig
+	filter   notifiers.EventFilter
+	tmpl     *template.Template
+	mcfg     mailConfig
+	br       notifiers.BindingResolver
+	tmplView *notifiers.TemplateView
 }
 
 type mailConfig struct {
@@ -50,14 +52,13 @@ type mailConfig struct {
 	recipients                           []string
 }
 
-func (s *smtpNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ string, sg notifiers.SecretGetter, _ notifiers.BindingResolver) error {
+func (s *smtpNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, cfgTemplate string, sg notifiers.SecretGetter, br notifiers.BindingResolver) error {
 	prd, err := notifiers.MakeCELPredicate(cfg.Spec.Notification.Filter)
 	if err != nil {
 		return fmt.Errorf("failed to create CELPredicate: %w", err)
 	}
 	s.filter = prd
-
-	tmpl, err := template.New("email_template").Parse(htmlBody)
+	tmpl, err := template.New("email_template").Parse(cfgTemplate)
 	if err != nil {
 		return fmt.Errorf("failed to parse HTML email template: %w", err)
 	}
@@ -68,7 +69,7 @@ func (s *smtpNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ strin
 		return fmt.Errorf("failed to construct a mail delivery config: %w", err)
 	}
 	s.mcfg = mcfg
-
+	s.br = br
 	return nil
 }
 
@@ -137,13 +138,20 @@ func (s *smtpNotifier) SendNotification(ctx context.Context, build *cbpb.Build) 
 		log.V(2).Infof("no mail for event:\n%s", proto.MarshalTextString(build))
 		return nil
 	}
-
+	bindings, err := s.br.Resolve(ctx, nil, build)
+	if err != nil {
+		log.Errorf("failed to resolve bindings :%v", err)
+	}
+	s.tmplView = &notifiers.TemplateView{
+		Build:  &notifiers.BuildView{Build: build},
+		Params: bindings,
+	}
 	log.Infof("sending email for (build id = %q, status = %s)", build.GetId(), build.GetStatus())
-	return s.sendSMTPNotification(build)
+	return s.sendSMTPNotification()
 }
 
-func (s *smtpNotifier) sendSMTPNotification(build *cbpb.Build) error {
-	email, err := s.buildEmail(build)
+func (s *smtpNotifier) sendSMTPNotification() error {
+	email, err := s.buildEmail()
 	if err != nil {
 		log.Warningf("failed to build email: %v", err)
 	}
@@ -158,15 +166,16 @@ func (s *smtpNotifier) sendSMTPNotification(build *cbpb.Build) error {
 	return nil
 }
 
-func (s *smtpNotifier) buildEmail(build *cbpb.Build) (string, error) {
-	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.EmailMedium)
+func (s *smtpNotifier) buildEmail() (string, error) {
+	build := s.tmplView.Build
+	logURL, err := notifiers.AddUTMParams(s.tmplView.Build.LogUrl, notifiers.EmailMedium)
 	if err != nil {
 		return "", fmt.Errorf("failed to add UTM params: %w", err)
 	}
 	build.LogUrl = logURL
 
 	body := new(bytes.Buffer)
-	if err := s.tmpl.Execute(body, build); err != nil {
+	if err := s.tmpl.Execute(body, s.tmplView); err != nil {
 		return "", err
 	}
 
@@ -200,41 +209,3 @@ func (s *smtpNotifier) buildEmail(build *cbpb.Build) (string, error) {
 
 	return msg, nil
 }
-
-const htmlBody = `<!doctype html>
-<html>
-<head>
-<!-- Compiled and minified CSS -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.97.0/css/materialize.min.css">
-<!-- Compiled and minified JavaScript -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.97.0/js/materialize.min.js"></script>
-<title>Cloud Build Status Email</title>
-</head>
-<body>
-<div class="container">
-<div class="row">
-<div class="col s2">&nbsp;</div>
-<div class="col s8">
-<div class="card-content white-text">
-<div class="card-title">{{.ProjectId}}: {{.BuildTriggerId}}</div>
-</div>
-<div class="card-content white">
-<table class="bordered">
-  <tbody>
-	<tr>
-	  <td>Status</td>
-	  <td>{{.Status}}</td>
-	</tr>
-	<tr>
-	  <td>Log URL</td>
-	  <td><a href="{{.LogUrl}}">Click Here</a></td>
-	</tr>
-  </tbody>
-</table>
-</div>
-</div>
-</div>
-<div class="col s2">&nbsp;</div>
-</div>
-</div>
-</html>`
