@@ -1,0 +1,17 @@
+apiVersion: cloud-build-notifiers/v1
+kind: SlackNotifier
+metadata:
+  name: example-slack-notifier
+spec:
+  notification:
+    filter: build.status == Build.Status.SUCCESS 
+    template:
+      type: golang
+      uri: gs://aricz-notifiers-demo-notifiers-config/slack.json
+    
+    delivery:
+      webhookUrl:
+        secretRef: webhook-url
+  secrets:
+  - name: webhook-url
+    value: projects/aricz-notifiers-demo/secrets/slack-webhook/versions/latest

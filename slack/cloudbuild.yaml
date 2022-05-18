@@ -1,0 +1,33 @@
+steps:
+- # Build the binary and put it into the builder image.
+  name: gcr.io/cloud-builders/docker
+  args: ['build', '--file=./slack-template/Dockerfile','--tag=gcr.io/$PROJECT_ID/aricz-slack-template-notifier', '.']
+
+- # Push the container image to Container Registry
+  name: gcr.io/cloud-builders/docker
+  args: ['push', 'gcr.io/$PROJECT_ID/aricz-slack-template-notifier']
+
+- # Deploy to Cloud Run
+  name: google/cloud-sdk
+  args: 
+    - gcloud
+    - run
+    - deploy
+    - aricz-slack-template-notifier
+    - --platform=managed
+    - --region=us-east1
+    - --image=gcr.io/$PROJECT_ID/aricz-slack-template-notifier
+    - --no-allow-unauthenticated
+    - --update-env-vars=CONFIG_PATH=${_CONFIG_PATH}
+
+substitutions:
+  _TAG: testing
+
+tags:
+  - $_TAG
+
+
+# Push the image with tags.
+images:
+- gcr.io/$PROJECT_ID/aricz-slack-template-notifier
+
