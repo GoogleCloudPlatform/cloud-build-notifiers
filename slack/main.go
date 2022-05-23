@@ -16,9 +16,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
-	"io/ioutil"
+	"io"
 	"os"
 	"strings"
 
@@ -34,6 +35,13 @@ const (
 	notificationChannelConfigName = "notificationChannel"
 	apiTokenSecretName            = "apiToken"
 	storagePathPrefixf            = "messages/%s"
+	repoNameSub                   = "REPO_NAME"
+	branchNameSub                 = "BRANCH_NAME"
+	commitShortShaSub             = "SHORT_SHA"
+	commitShaSub                  = "COMMIT_SHA"
+	commitMsgSub                  = "_COMMIT_MESSAGE"
+	commitURLSub                  = "_COMMIT_URL"
+	commitAuthorSub               = "_COMMIT_AUTHOR"
 )
 
 func main() {
@@ -47,7 +55,7 @@ type slackNotifier struct {
 
 	webhookURL          string
 	notificationChannel string
-	apiToken            string
+	slackClient         *slack.Client
 
 	storageBucket string
 }
@@ -90,7 +98,8 @@ func (s *slackNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg not
 	if err != nil {
 		return fmt.Errorf("failed to get api secret: %w", err)
 	}
-	s.apiToken = apiToken
+
+	s.slackClient = slack.New(apiToken)
 
 	cfgPath := os.Getenv("CONFIG_PATH")
 	if trm := strings.TrimPrefix(cfgPath, "gs://"); trm != cfgPath {
@@ -102,136 +111,231 @@ func (s *slackNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg not
 	return nil
 }
 
-func (s *slackNotifier) SendNotification(ctx context.Context, build *cbpb.Build) (err error) {
+// Used to store build information in google cloud storage
+type storedBuild struct {
+	Timestamp string                 `json:"timestamp"`
+	Build     map[string]*cbpb.Build `json:"build"`
+}
+
+func (s *slackNotifier) SendNotification(ctx context.Context, build *cbpb.Build) error {
 	if !s.filter.Apply(ctx, build) {
 		return nil
 	}
 
-	slackClient := slack.New(s.apiToken)
+	// Create the google cloud storage client
+	sc, err := storage.NewClient(context.Background())
+	if err != nil {
+		log.Infof("Unable to create storage client : %q", err.Error())
+		return err
+	}
+	defer sc.Close()
+
+	// Get the commit sha for the storage file name for deploybot
+	commitSha, ok := build.Substitutions[commitShaSub]
+	if !ok {
+		return fmt.Errorf("Unknown %s", commitShaSub)
+	}
 
 	log.Infof("sending Slack webhook for Build %q (status: %q)", build.Id, build.Status)
-	attachmentMsgOpt := s.buildAttachmentMessageOption(build)
-	timestamp := s.getTimestamp(build.Id)
-	if timestamp == "" {
-		_, timestamp, err = slackClient.PostMessage(s.notificationChannel, *attachmentMsgOpt)
-		s.setTimestamp(build.Id, timestamp)
-	} else {
-		_, _, _, err = slackClient.UpdateMessage(s.notificationChannel, timestamp, *attachmentMsgOpt)
-		s.deleteTimestamp(build.Id)
-	}
-	return
-}
 
-func (s *slackNotifier) getStoragePath(buildId string) string {
-	return fmt.Sprintf(storagePathPrefixf, buildId)
-}
-
-func (s *slackNotifier) deleteTimestamp(buildId string) {
-	sc, err := storage.NewClient(context.Background())
-	if err != nil {
-		return
-	}
-	defer sc.Close()
-
-	if err := sc.Bucket(s.storageBucket).Object(s.getStoragePath(buildId)).Delete(context.Background()); err != nil {
-		log.Infof("Error deleting the object: %q", err.Error())
-		return
-	}
-	return
-}
-
-func (s *slackNotifier) setTimestamp(buildId string, timestamp string) {
-	sc, err := storage.NewClient(context.Background())
-	if err != nil {
-		log.Infof("Unable to create storage client: %q", err.Error())
-		return
-	}
-	defer sc.Close()
-
-	writer := sc.Bucket(s.storageBucket).Object(s.getStoragePath(buildId)).NewWriter(context.Background())
-	defer func() {
-		err := writer.Close()
+	// Get the stored builds from google cloud storage if it exists
+	sb := s.getStoredBuild(sc, commitSha)
+	// Add the latest build to the stored build info
+	sb.Build[build.Id] = build
+	// Create the message to send to slack
+	attachmentMsgOpt := buildAttachmentMessageOption(sb)
+	// If no initial message has been sent to slack yet
+	if sb.Timestamp == "" {
+		// Send the initial message
+		_, timestamp, err := s.slackClient.PostMessage(s.notificationChannel, *attachmentMsgOpt)
 		if err != nil {
-			log.Infof("Error closing the writer: %q", err.Error())
+			log.Infof("Unable to post initial build message to slack : %q", err.Error())
 		}
-	}()
-	if _, err := fmt.Fprint(writer, timestamp); err != nil {
-		return
+		// Set the slack timestamp (the unique identifier slack uses for channel messages)
+		sb.Timestamp = timestamp
+		// Store the initial build information in google cloud
+		return s.updateCloudStoreFile(sc, commitSha, sb)
 	}
+
+	// Update the slack message
+	_, _, _, err = s.slackClient.UpdateMessage(s.notificationChannel, sb.Timestamp, *attachmentMsgOpt)
+	if err != nil {
+		log.Infof("Unable to update slack message : %q", err.Error())
+	}
+
+	// Determine if we're done and need to delete the build from google cloud store
+	// NOTE: this may never work because of a race condition on multi-region, but dammit, we'll try!!
+	if shouldDeleteBuildFile(sb) {
+		log.Infof("Deleting the build file: %s", commitSha)
+		err = sc.Bucket(s.storageBucket).Object(getStoragePath(commitSha)).Delete(context.Background())
+		if err != nil {
+			log.Infof("Error deleting the build file: %q", err.Error())
+		}
+	}
+
+	// Update the stored build information
+	err = s.updateCloudStoreFile(sc, commitSha, sb)
+	if err != nil {
+		return err
+	}
+
+	return err
 }
 
-func (s *slackNotifier) getTimestamp(buildId string) (timestamp string) {
-	sc, err := storage.NewClient(context.Background())
-	if err != nil {
-		return
-	}
-	defer sc.Close()
-
-	path := s.getStoragePath(buildId)
-	//r, err := sc.NewReader(ctx, bucket, path)
+// getStoredBuild fetches the build info for this commit hash from google cloud storage
+// and adds the latest build to the response
+func (s *slackNotifier) getStoredBuild(sc *storage.Client, commitSha string) storedBuild {
+	path := getStoragePath(commitSha)
+	sb := storedBuild{Build: map[string]*cbpb.Build{}}
+	// Open a reader for the file in the google store, if it exists
 	reader, err := sc.Bucket(s.storageBucket).Object(path).NewReader(context.Background())
 	if err != nil {
-		return
+		// If it doesn't exist yet, just log that info, we can create it later
+		log.Infof("Could not read stored file (may not exist yet) (%s) in bucket (%s) : %q", path, s.storageBucket, err.Error())
+		return sb
 	}
 	defer reader.Close()
-
-	var b []byte
-	// will move to "io" in golang 1.16
-	if b, err = ioutil.ReadAll(reader); err != nil {
-		return
+	// Read and unmarshal the file
+	sb, err = readFromBuildStorageFile(reader, sb)
+	if err != nil {
+		log.Infof("Unable to read/unmarshal file (%s) in bucket (%s) : %q", s.storageBucket, path, err.Error())
 	}
-	timestamp = string(b)
-
-	return
+	return sb
 }
 
-func (s *slackNotifier) buildAttachmentMessageOption(build *cbpb.Build) *slack.MsgOption {
-	repoName, ok := build.Substitutions["REPO_NAME"]
-	if !ok {
-		repoName = "UNKNOWN_REPO"
+// updateCloudStore updates google cloud storage with the latest build info under the commit sha filename
+func (s *slackNotifier) updateCloudStoreFile(sc *storage.Client, commitSha string, sb storedBuild) error {
+	writer := sc.Bucket(s.storageBucket).Object(getStoragePath(commitSha)).NewWriter(context.Background())
+	defer writer.Close()
+
+	return writeBuildToStorageFile(writer, sb)
+}
+
+func getStoragePath(commitSha string) string {
+	return fmt.Sprintf(storagePathPrefixf, commitSha)
+}
+
+// readFromBuildStorageFile reads the json from the build storage file and adds the latest build
+func readFromBuildStorageFile(reader io.Reader, sb storedBuild) (storedBuild, error) {
+	var err error
+	var b []byte
+	if b, err = io.ReadAll(reader); err != nil {
+		log.Infof("Unable to read from file : %q", err.Error())
+		return sb, err
 	}
-	branchName, ok := build.Substitutions["BRANCH_NAME"]
-	if !ok {
-		branchName = "UNKNOWN_BRANCH"
-	}
-	commitSha, ok := build.Substitutions["SHORT_SHA"]
-	if !ok {
-		commitSha = "UNKNOWN_COMMIT_SHA"
-	}
-	commitMsg, ok := build.Substitutions["_COMMIT_MESSAGE"]
-	if !ok {
-		commitMsg = "UNKNOWN_COMMIT_MESSAGE"
-	}
-	commitURL, ok := build.Substitutions["_COMMIT_URL"]
-	if !ok {
-		commitURL = "UNKNOWN_COMMIT_URL"
-	}
-	commitAuthor, ok := build.Substitutions["_COMMIT_AUTHOR"]
-	if !ok {
-		commitAuthor = "UNKNOWN_COMMIT_AUTHOR"
+	if err := json.Unmarshal(b, &sb); err != nil {
+		log.Infof("Unable to unmarshal json : %q", err.Error())
+		return sb, err
 	}
 
-	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.ChatMedium)
+	return sb, nil
+}
+
+// writeBuildToStorageFile writes the json to the build storage file
+func writeBuildToStorageFile(writer io.Writer, sb storedBuild) error {
+	// Marshal the timestamp/build info
+	b, err := json.Marshal(sb)
 	if err != nil {
-		logURL = build.LogUrl
+		log.Infof("Unable to marshal : %q", err.Error())
+		return err
+	}
+
+	// Write the timestamp/build info file to the storage file
+	if _, err := fmt.Fprint(writer, string(b)); err != nil {
+		log.Infof("Unable to write to cloud storage : %q", err.Error())
+	}
+
+	return err
+}
+
+// shouldDeleteBuildFile return false if one of the builds is still in progress
+func shouldDeleteBuildFile(sb storedBuild) bool {
+	for _, build := range sb.Build {
+		// If we are still working on the build/deploy
+		if statusInProgress(build.Status) {
+			// Do not delete the build message yet from GCP
+			return false
+		}
+	}
+	return true
+}
+
+// statusInProgress checks if the given status is an "in progress" status
+func statusInProgress(status cbpb.Build_Status) bool {
+	inProgressStatuses := []cbpb.Build_Status{
+		cbpb.Build_WORKING,
+		cbpb.Build_PENDING,
+		cbpb.Build_QUEUED,
+	}
+	for _, ps := range inProgressStatuses {
+		if status == ps {
+			return true
+		}
+	}
+	return false
+}
+
+func buildAttachmentMessageOption(sb storedBuild) *slack.MsgOption {
+	// Default values for the build info fields
+	buildInfo := map[string]string{
+		repoNameSub:       "UNKNOWN_REPO",
+		branchNameSub:     "UNKNOWN_BRANCH",
+		commitShortShaSub: "UNKNOWN_COMMIT_SHA",
+		commitMsgSub:      "UNKNOWN_COMMIT_MESSAGE",
+		commitURLSub:      "UNKNOWN_COMMIT_URL",
+		commitAuthorSub:   "UNKNOWN_COMMIT_AUTHOR",
+	}
+	buildLogUrl := ""
+	buildStatus := cbpb.Build_STATUS_UNKNOWN
+	buildProjectId := ""
+	// Look at all the builds
+	// (named this loop as buildLoop so we can break out of it in the switch case)
+buildLoop:
+	for _, build := range sb.Build {
+		// Check all the build substition info fields
+		for key := range buildInfo {
+			// If there is a value for that build key in the build info
+			if val, ok := build.Substitutions[key]; ok {
+				// Update value for that key
+				buildInfo[key] = val
+			}
+		}
+		// Capture the other fields we need for our message
+		buildLogUrl = build.LogUrl
+		buildStatus = build.Status
+		buildProjectId = build.ProjectId
+		// If one of the builds failed, this should be the primary message
+		switch buildStatus {
+		case
+			cbpb.Build_FAILURE,
+			cbpb.Build_TIMEOUT,
+			cbpb.Build_INTERNAL_ERROR:
+			// Stop looking through other builds
+			break buildLoop
+		}
+	}
+
+	logURL, err := notifiers.AddUTMParams(buildLogUrl, notifiers.ChatMedium)
+	if err != nil {
+		logURL = buildLogUrl
 	}
 
 	txt := fmt.Sprintf(
 		"%s: :%s: %s (%s) <%s|View Build>\n*Branch*: %s *Author*: %s \n<%s|Commit> *%s*: %s",
-		build.Status,
-		repoName,
-		repoName,
-		build.ProjectId,
+		buildStatus,
+		buildInfo[repoNameSub],
+		buildInfo[repoNameSub],
+		buildProjectId,
 		logURL,
-		branchName,
-		commitAuthor,
-		commitURL,
-		commitSha,
-		commitMsg,
+		buildInfo[branchNameSub],
+		buildInfo[commitAuthorSub],
+		buildInfo[commitURLSub],
+		buildInfo[commitShortShaSub],
+		buildInfo[commitMsgSub],
 	)
 
 	var clr string
-	switch build.Status {
+	switch buildStatus {
 	case cbpb.Build_SUCCESS:
 		clr = "good"
 	case cbpb.Build_FAILURE, cbpb.Build_INTERNAL_ERROR, cbpb.Build_TIMEOUT:

@@ -27,6 +27,6 @@ RUN set -x && apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -
     ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-FROM gcr.io/distroless/base
+FROM alpine
 COPY --from=build-env /go-app /
 ENTRYPOINT ["/go-app", "--alsologtostderr", "--v=0"]

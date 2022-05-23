@@ -14,10 +14,10 @@ steps:
     waitFor: ['-']
 
   - id: gofmt
-    name: golang:1.16
-    entrypoint: 'bash'
+    name: golang
+    entrypoint: 'sh'
     args:
      - -c 
      - |
-       test -z $(gofmt -s -l .)
+       gofmt -s -d . && test -z $(gofmt -s -d .)
     waitFor: ['-']
