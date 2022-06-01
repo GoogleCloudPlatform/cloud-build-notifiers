@@ -113,7 +113,6 @@ type actualBQFactory struct {
 }
 
 func (bqf *actualBQFactory) Make(ctx context.Context) (bq, error) {
-	log.Info("Make()")
 	projectID := os.Getenv("PROJECT_ID")
 	if projectID == "" {
 		return nil, errors.New("PROJECT_ID environment variable must be set")
@@ -203,7 +202,6 @@ func parsePBTime(time *timestamppb.Timestamp) (civil.DateTime, error) {
 }
 
 func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) error {
-	log.Infof("SendNotification(%v)", build)
 	if !n.filter.Apply(ctx, build) {
 		log.V(2).Infof("not doing BQ write for build %v", build.Id)
 		return nil
@@ -278,7 +276,7 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 	}
 	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.StorageMedium)
 	if err != nil {
-		return fmt.Errorf("Error generating UTM params: %v", err)
+		return fmt.Errorf("error generating UTM params: %v", err)
 	}
 	substitutions := []*substitution{}
 	for key, value := range build.Substitutions {
@@ -320,7 +318,6 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 	return n.client.WriteRow(ctx, newRow)
 }
 func (bq *actualBQ) EnsureDataset(ctx context.Context, datasetName string) error {
-	log.Infof("EnsureDataset(%v)", datasetName)
 	// Check for existence of dataset, create if false
 	bq.dataset = bq.client.Dataset(datasetName)
 	_, err := bq.client.Dataset(datasetName).Metadata(ctx)
@@ -337,18 +334,17 @@ func (bq *actualBQ) EnsureDataset(ctx context.Context, datasetName string) error
 
 func (bq *actualBQ) EnsureTable(ctx context.Context, tableName string) error {
 	// Check for existence of table, create if false
-	log.Infof("EnsureTable(%v)", tableName)
 	bq.table = bq.dataset.Table(tableName)
 	schema, err := bigquery.InferSchema(bqRow{})
 	if err != nil {
-		return fmt.Errorf("Failed to infer schema: %v", err)
+		return fmt.Errorf("failed to infer schema: %v", err)
 	}
 	metadata, err := bq.dataset.Table(tableName).Metadata(ctx)
 	if err != nil {
 		log.Warningf("Error obtaining table metadata: %q;Creating new BigQuery table: %q", err, tableName)
 		// Create table if it does not exist.
 		if err := bq.table.Create(ctx, &bigquery.TableMetadata{Name: tableName, Description: "BigQuery Notifier Build Data Table", Schema: schema}); err != nil {
-			return fmt.Errorf("Failed to initialize table %v: ", err)
+			return fmt.Errorf("failed to initialize table %v: ", err)
 		}
 	} else if len(metadata.Schema) == 0 {
 		log.Warningf("No schema found for table, writing new schema for table: %v", tableName)
@@ -356,7 +352,7 @@ func (bq *actualBQ) EnsureTable(ctx context.Context, tableName string) error {
 			Schema: schema,
 		}
 		if _, err := bq.table.Update(ctx, update, metadata.ETag); err != nil {
-			return fmt.Errorf("Error: unable to update schema of table: %v", err)
+			return fmt.Errorf("error: unable to update schema of table: %v", err)
 		}
 	}
 
@@ -364,11 +360,10 @@ func (bq *actualBQ) EnsureTable(ctx context.Context, tableName string) error {
 }
 
 func (bq *actualBQ) WriteRow(ctx context.Context, row *bqRow) error {
-	log.Infof("WriteRow(%v)", row)
 	ins := bq.table.Inserter()
 	log.V(2).Infof("Writing row: %v", row)
 	if err := ins.Put(ctx, row); err != nil {
-		return fmt.Errorf("Error inserting row into BQ: %v", err)
+		return fmt.Errorf("error inserting row into BQ: %v", err)
 	}
 	return nil
 }
