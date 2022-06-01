@@ -581,6 +581,9 @@ func TestSendNotification(t *testing.T) {
 			FinishTime:     timestamppb.Now(),
 			Tags:           []string{},
 			Options:        &cbpb.BuildOptions{Env: []string{}},
+			Steps: []*cbpb.BuildStep{
+				{Status: cbpb.Build_SUCCESS},
+			},
 		},
 		wantErr: true,
 		wantRow: false,
@@ -588,7 +591,7 @@ func TestSendNotification(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fakeBQ := &fakeBQ{}
 			n := &bqNotifier{bqf: &fakeBQFactory{fakeBQ}}
-			err := n.SetUp(context.Background(), tc.cfg, "", nil, nil)
+			err := n.SetUp(context.Background(), tc.cfg, "{{.Build.Status}}", nil, nil)
 			if err != nil {
 				t.Fatalf("Setup(%v) got unexpected error: %v", tc.cfg, err)
 			}

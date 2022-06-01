@@ -4,7 +4,10 @@ metadata:
   name: example-bigquery-notifier
 spec:
   notification:
-    filter: build.build_trigger_id == "123e4567-e89b-12d3-a456-426614174000"
+    filter: build.status == Build.Status.SUCCESS
+    template:
+      type: golang
+      uri: gs://project-name/arbitary.json
     delivery:
-      table: projects/project_id/datasets/dataset_name/tables/table_name
+      table: projects/project-name/test-data/tables/build_data
 

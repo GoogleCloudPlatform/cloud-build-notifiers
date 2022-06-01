@@ -15,12 +15,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"math/big"
 	"os"
 	"regexp"
+	"text/template"
 	"time"
 
 	"cloud.google.com/go/bigquery"
@@ -57,9 +59,12 @@ func main() {
 }
 
 type bqNotifier struct {
-	bqf    bqFactory
-	filter notifiers.EventFilter
-	client bq
+	bqf      bqFactory
+	filter   notifiers.EventFilter
+	tmpl     *template.Template
+	client   bq
+	br       notifiers.BindingResolver
+	tmplView *notifiers.TemplateView
 }
 
 type bqRow struct {
@@ -76,6 +81,7 @@ type bqRow struct {
 	Env            []string
 	LogURL         string
 	Substitutions  []*substitution
+	JSON           string
 }
 
 type substitution struct {
@@ -107,7 +113,7 @@ type actualBQFactory struct {
 }
 
 func (bqf *actualBQFactory) Make(ctx context.Context) (bq, error) {
-
+	log.Info("Make()")
 	projectID := os.Getenv("PROJECT_ID")
 	if projectID == "" {
 		return nil, errors.New("PROJECT_ID environment variable must be set")
@@ -152,7 +158,7 @@ func imageManifestToBuildImage(image string) (*buildImage, error) {
 	return &buildImage{SHA: sha.String(), ContainerSizeMB: containerSize}, nil
 }
 
-func (n *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ string, _ notifiers.SecretGetter, _ notifiers.BindingResolver) error {
+func (n *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, bigQueryJson string, _ notifiers.SecretGetter, br notifiers.BindingResolver) error {
 	prd, err := notifiers.MakeCELPredicate(cfg.Spec.Notification.Filter)
 	if err != nil {
 		return fmt.Errorf("failed to make a CEL predicate: %v", err)
@@ -180,8 +186,12 @@ func (n *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ string,
 	if err = n.client.EnsureTable(ctx, rs[2]); err != nil {
 		return err
 	}
-	return nil
 
+	tmpl, err := template.New("bq_json_template").Parse(bigQueryJson)
+	n.tmpl = tmpl
+	n.br = br
+
+	return nil
 }
 
 func parsePBTime(time *timestamppb.Timestamp) (civil.DateTime, error) {
@@ -193,6 +203,7 @@ func parsePBTime(time *timestamppb.Timestamp) (civil.DateTime, error) {
 }
 
 func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) error {
+	log.Infof("SendNotification(%v)", build)
 	if !n.filter.Apply(ctx, build) {
 		log.V(2).Infof("not doing BQ write for build %v", build.Id)
 		return nil
@@ -273,6 +284,23 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 	for key, value := range build.Substitutions {
 		substitutions = append(substitutions, &substitution{key, value})
 	}
+	var bindings map[string]string
+	if n.br != nil {
+		bindings, err = n.br.Resolve(ctx, nil, build)
+		if err != nil {
+			return fmt.Errorf("failed to resolve bindings: %w", err)
+		}
+	}
+
+	n.tmplView = &notifiers.TemplateView{
+		Build:  &notifiers.BuildView{Build: build},
+		Params: bindings,
+	}
+	var buf bytes.Buffer
+	if err := n.tmpl.Execute(&buf, n.tmplView); err != nil {
+		return err
+	}
+
 	newRow := &bqRow{
 		ProjectID:      build.ProjectId,
 		ID:             build.Id,
@@ -287,10 +315,12 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 		Env:            build.Options.Env,
 		LogURL:         logURL,
 		Substitutions:  substitutions,
+		JSON:           buf.String(),
 	}
 	return n.client.WriteRow(ctx, newRow)
 }
 func (bq *actualBQ) EnsureDataset(ctx context.Context, datasetName string) error {
+	log.Infof("EnsureDataset(%v)", datasetName)
 	// Check for existence of dataset, create if false
 	bq.dataset = bq.client.Dataset(datasetName)
 	_, err := bq.client.Dataset(datasetName).Metadata(ctx)
@@ -307,6 +337,7 @@ func (bq *actualBQ) EnsureDataset(ctx context.Context, datasetName string) error
 
 func (bq *actualBQ) EnsureTable(ctx context.Context, tableName string) error {
 	// Check for existence of table, create if false
+	log.Infof("EnsureTable(%v)", tableName)
 	bq.table = bq.dataset.Table(tableName)
 	schema, err := bigquery.InferSchema(bqRow{})
 	if err != nil {
@@ -333,6 +364,7 @@ func (bq *actualBQ) EnsureTable(ctx context.Context, tableName string) error {
 }
 
 func (bq *actualBQ) WriteRow(ctx context.Context, row *bqRow) error {
+	log.Infof("WriteRow(%v)", row)
 	ins := bq.table.Inserter()
 	log.V(2).Infof("Writing row: %v", row)
 	if err := ins.Put(ctx, row); err != nil {
