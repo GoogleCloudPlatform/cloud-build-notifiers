@@ -28,6 +28,43 @@ import (
 )
 
 const password = "rosebud"
+const htmlBody = `<!doctype html>
+<html>
+<head>
+<!-- Compiled and minified CSS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.97.0/css/materialize.min.css">
+<!-- Compiled and minified JavaScript -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.97.0/js/materialize.min.js"></script>
+<title>Cloud Build Status Email</title>
+</head>
+<body>
+<div class="container">
+<div class="row">
+<div class="col s2">&nbsp;</div>
+<div class="col s8">
+<div class="card-content white-text">
+<div class="card-title">{{.Build.ProjectId}}: {{.Build.BuildTriggerId}}</div>
+</div>
+<div class="card-content white">
+<table class="bordered">
+  <tbody>
+	<tr>
+	  <td>Status</td>
+	  <td>{{.Params.buildStatus}}</td>
+	</tr>
+	<tr>
+	  <td>Log URL</td>
+	  <td><a href="{{.Build.LogUrl}}">Click Here</a></td>
+	</tr>
+  </tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="col s2">&nbsp;</div>
+</div>
+</div>
+</html>`
 
 type fakeSecretGetter struct{}
 
@@ -157,7 +194,6 @@ func TestDefaultEmailTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("template.Parse failed: %v", err)
 	}
-
 	build := &cbpb.Build{
 		Id:             "some-build-id",
 		ProjectId:      "my-project-id",
@@ -166,8 +202,15 @@ func TestDefaultEmailTemplate(t *testing.T) {
 		LogUrl:         "https://some.example.com/log/url",
 	}
 
+	view := &notifiers.TemplateView{
+		Build: &notifiers.BuildView{
+			Build: build,
+		},
+		Params: map[string]string{"buildStatus": "SUCCESS"},
+	}
+
 	body := new(bytes.Buffer)
-	if err := tmpl.Execute(body, build); err != nil {
+	if err := tmpl.Execute(body, view); err != nil {
 		t.Fatalf("failed to execute template: %v", err)
 	}
 
