@@ -115,7 +115,8 @@ func (s *slackNotifier) writeMessage() (*slack.WebhookMessage, error) {
 	case cbpb.Build_INTERNAL_ERROR, cbpb.Build_TIMEOUT:
 		clr = "#ECB22E"  // yeallow
 	default:
-		clr = "warning"
+		// https://api.slack.com/reference/messaging/attachments#fields
+		clr = "grey"
 	}
 
 	var buf bytes.Buffer
