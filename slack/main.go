@@ -108,9 +108,12 @@ func (s *slackNotifier) writeMessage() (*slack.WebhookMessage, error) {
 	var clr string
 	switch build.Status {
 	case cbpb.Build_SUCCESS:
-		clr = "good"
-	case cbpb.Build_FAILURE, cbpb.Build_INTERNAL_ERROR, cbpb.Build_TIMEOUT:
-		clr = "danger"
+		// https://stackoverflow.com/q/70039333
+		clr = "#2EB67D"  // green
+	case cbpb.Build_FAILURE:
+		clr = "#ff0000"  // red
+	case cbpb.Build_INTERNAL_ERROR, cbpb.Build_TIMEOUT:
+		clr = "#ECB22E"  // yeallow
 	default:
 		clr = "warning"
 	}
@@ -126,5 +129,11 @@ func (s *slackNotifier) writeMessage() (*slack.WebhookMessage, error) {
 		return nil, fmt.Errorf("failed to unmarshal templating JSON: %w", err)
 	}
 
-	return &slack.WebhookMessage{Attachments: []slack.Attachment{{Color: clr}}, Blocks: &blocks}, nil
+	// https://api.slack.com/reference/messaging/attachments#fields
+	atch := slack.Attachment{
+		Color: clr,
+		Blocks: blocks,
+	}
+
+    return &slack.WebhookMessage{Attachments: []slack.Attachment{atch}}, nil
 }
