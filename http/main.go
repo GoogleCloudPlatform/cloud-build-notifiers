@@ -17,14 +17,15 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
+	"text/template"
 
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
 	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func main() {
@@ -34,22 +35,31 @@ func main() {
 }
 
 type httpNotifier struct {
-	filter notifiers.EventFilter
-	url    string
+	filter   notifiers.EventFilter
+	tmpl     *template.Template
+	url      string
+	br       notifiers.BindingResolver
+	tmplView *notifiers.TemplateView
 }
 
-func (h *httpNotifier) SetUp(_ context.Context, cfg *notifiers.Config, _ string, _ notifiers.SecretGetter, _ notifiers.BindingResolver) error {
+func (h *httpNotifier) SetUp(_ context.Context, cfg *notifiers.Config, httpTemplate string, _ notifiers.SecretGetter, br notifiers.BindingResolver) error {
 	prd, err := notifiers.MakeCELPredicate(cfg.Spec.Notification.Filter)
 	if err != nil {
 		return fmt.Errorf("failed to create CELPredicate: %w", err)
 	}
 	h.filter = prd
+	h.br = br
 
 	url, ok := cfg.Spec.Notification.Delivery["url"].(string)
 	if !ok {
 		return fmt.Errorf("expected delivery config %v to have string field `url`", cfg.Spec.Notification.Delivery)
 	}
 	h.url = url
+	tmpl, err := template.New("http_template").Parse(httpTemplate)
+	if err != nil {
+		return fmt.Errorf("failed to parse template: %v", err)
+	}
+	h.tmpl = tmpl
 
 	return nil
 }
@@ -62,26 +72,36 @@ func (h *httpNotifier) SendNotification(ctx context.Context, build *cbpb.Build) 
 
 	log.Infof("sending HTTP request for event (build id = %s, status = %s)", build.Id, build.Status)
 
+	bindings, err := h.br.Resolve(ctx, nil, build)
+	if err != nil {
+		return fmt.Errorf("failed to resolve bindings: %w", err)
+	}
+	h.tmplView = &notifiers.TemplateView{
+		Build:  &notifiers.BuildView{Build: build},
+		Params: bindings,
+	}
+
 	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.HTTPMedium)
 	if err != nil {
 		return fmt.Errorf("failed to add UTM params: %w", err)
 	}
 	build.LogUrl = logURL
 
-	mo := protojson.MarshalOptions{}
-	jb, err := mo.Marshal(proto.MessageV2(build))
-	if err != nil {
-		return fmt.Errorf("failed to marshal Build proto to JSON: %w", err)
+	payload := new(bytes.Buffer)
+	var buf bytes.Buffer
+	if err := h.tmpl.Execute(&buf, h.tmplView); err != nil {
+		return err
 	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.url, bytes.NewReader(jb))
+	err = json.NewEncoder(payload).Encode(buf)
+	if err != nil {
+		return fmt.Errorf("failed to encode payload: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.url, strings.NewReader(buf.String()))
 	if err != nil {
 		return fmt.Errorf("failed to create a new HTTP request: %w", err)
 	}
-
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "GCB-Notifier/0.1 (http)")
-
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to make HTTP request: %w", err)

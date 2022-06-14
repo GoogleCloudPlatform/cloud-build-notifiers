@@ -19,6 +19,9 @@ metadata:
 spec:
   notification:
     filter: build.status == Build.Status.SUCCESS
+    template:
+      type: golang
+      uri: gs://project-name/http.json
     delivery:
       # The `http(s)://` protocol prefix is required.
-      url: https://some.example.com/notify
+      url: https://some-endpoint
