@@ -62,7 +62,7 @@ func TestWriteMessage(t *testing.T) {
 
 	want := &slack.WebhookMessage{
 		Attachments: []slack.Attachment{{
-			Color: "good",
+			Color: "#22bb33",
 			Blocks: slack.Blocks{
 				BlockSet: []slack.Block{
 					&slack.SectionBlock{
