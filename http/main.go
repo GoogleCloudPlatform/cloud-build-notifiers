@@ -97,16 +97,12 @@ func (h *httpNotifier) SendNotification(ctx context.Context, build *cbpb.Build) 
 	if err != nil {
 		return fmt.Errorf("failed to encode payload: %w", err)
 	}
-	log.Infof("request body: %v", buf.String())
-	log.Infof("encoded json body: %v", payload.String())
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.url, strings.NewReader(buf.String()))
 	if err != nil {
 		return fmt.Errorf("failed to create a new HTTP request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "GCB-Notifier/0.1 (http)")
-	yes, _ := httputil.DumpRequestOut(req, true)
-	log.Infof("DUMPED REQUEST: %s", string(yes))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to make HTTP request: %w", err)
