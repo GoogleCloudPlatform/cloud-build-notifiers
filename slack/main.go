@@ -126,5 +126,5 @@ func (s *slackNotifier) writeMessage() (*slack.WebhookMessage, error) {
 		return nil, fmt.Errorf("failed to unmarshal templating JSON: %w", err)
 	}
 
-	return &slack.WebhookMessage{Attachments: []slack.Attachment{{Color: clr}}, Blocks: &blocks}, nil
+	return &slack.WebhookMessage{Attachments: []slack.Attachment{{Color: clr, Blocks: blocks}}}, nil
 }

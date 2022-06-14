@@ -61,35 +61,37 @@ func TestWriteMessage(t *testing.T) {
 	}
 
 	want := &slack.WebhookMessage{
-		Attachments: []slack.Attachment{{Color: "good"}},
-		Blocks: &slack.Blocks{
-			BlockSet: []slack.Block{
-				&slack.SectionBlock{
-					Type: "section",
-					Text: &slack.TextBlockObject{
-						Type: "mrkdwn",
-						Text: "Build Status: SUCCESS",
+		Attachments: []slack.Attachment{{
+			Color: "good",
+			Blocks: slack.Blocks{
+				BlockSet: []slack.Block{
+					&slack.SectionBlock{
+						Type: "section",
+						Text: &slack.TextBlockObject{
+							Type: "mrkdwn",
+							Text: "Build Status: SUCCESS",
+						},
 					},
-				},
-				&slack.DividerBlock{
-					Type: "divider",
-				},
-				&slack.SectionBlock{
-					Type: "section",
-					Text: &slack.TextBlockObject{
-						Type: "mrkdwn",
-						Text: "View Build Logs",
+					&slack.DividerBlock{
+						Type: "divider",
 					},
-					Accessory: &slack.Accessory{ButtonElement: &slack.ButtonBlockElement{
-						Type:     "button",
-						Text:     &slack.TextBlockObject{Type: "plain_text", Text: "Logs"},
-						ActionID: "button-action",
-						URL:      "https://some.example.com/log/url?foo=bar",
-						Value:    "click_me_123",
-					}},
+					&slack.SectionBlock{
+						Type: "section",
+						Text: &slack.TextBlockObject{
+							Type: "mrkdwn",
+							Text: "View Build Logs",
+						},
+						Accessory: &slack.Accessory{ButtonElement: &slack.ButtonBlockElement{
+							Type:     "button",
+							Text:     &slack.TextBlockObject{Type: "plain_text", Text: "Logs"},
+							ActionID: "button-action",
+							URL:      "https://some.example.com/log/url?foo=bar",
+							Value:    "click_me_123",
+						}},
+					},
 				},
 			},
-		},
+		}},
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
