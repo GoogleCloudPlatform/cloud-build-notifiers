@@ -15,12 +15,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"math/big"
 	"os"
 	"regexp"
+	"text/template"
 	"time"
 
 	"cloud.google.com/go/bigquery"
@@ -57,9 +59,12 @@ func main() {
 }
 
 type bqNotifier struct {
-	bqf    bqFactory
-	filter notifiers.EventFilter
-	client bq
+	bqf      bqFactory
+	filter   notifiers.EventFilter
+	tmpl     *template.Template
+	client   bq
+	br       notifiers.BindingResolver
+	tmplView *notifiers.TemplateView
 }
 
 type bqRow struct {
@@ -76,6 +81,7 @@ type bqRow struct {
 	Env            []string
 	LogURL         string
 	Substitutions  []*substitution
+	JSON           string
 }
 
 type substitution struct {
@@ -107,7 +113,6 @@ type actualBQFactory struct {
 }
 
 func (bqf *actualBQFactory) Make(ctx context.Context) (bq, error) {
-
 	projectID := os.Getenv("PROJECT_ID")
 	if projectID == "" {
 		return nil, errors.New("PROJECT_ID environment variable must be set")
@@ -152,7 +157,7 @@ func imageManifestToBuildImage(image string) (*buildImage, error) {
 	return &buildImage{SHA: sha.String(), ContainerSizeMB: containerSize}, nil
 }
 
-func (n *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ string, _ notifiers.SecretGetter, _ notifiers.BindingResolver) error {
+func (n *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, bigQueryJson string, _ notifiers.SecretGetter, br notifiers.BindingResolver) error {
 	prd, err := notifiers.MakeCELPredicate(cfg.Spec.Notification.Filter)
 	if err != nil {
 		return fmt.Errorf("failed to make a CEL predicate: %v", err)
@@ -180,8 +185,12 @@ func (n *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ string,
 	if err = n.client.EnsureTable(ctx, rs[2]); err != nil {
 		return err
 	}
-	return nil
 
+	tmpl, err := template.New("bq_json_template").Parse(bigQueryJson)
+	n.tmpl = tmpl
+	n.br = br
+
+	return nil
 }
 
 func parsePBTime(time *timestamppb.Timestamp) (civil.DateTime, error) {
@@ -267,12 +276,29 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 	}
 	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.StorageMedium)
 	if err != nil {
-		return fmt.Errorf("Error generating UTM params: %v", err)
+		return fmt.Errorf("error generating UTM params: %v", err)
 	}
 	substitutions := []*substitution{}
 	for key, value := range build.Substitutions {
 		substitutions = append(substitutions, &substitution{key, value})
 	}
+	var bindings map[string]string
+	if n.br != nil {
+		bindings, err = n.br.Resolve(ctx, nil, build)
+		if err != nil {
+			return fmt.Errorf("failed to resolve bindings: %w", err)
+		}
+	}
+
+	n.tmplView = &notifiers.TemplateView{
+		Build:  &notifiers.BuildView{Build: build},
+		Params: bindings,
+	}
+	var buf bytes.Buffer
+	if err := n.tmpl.Execute(&buf, n.tmplView); err != nil {
+		return err
+	}
+
 	newRow := &bqRow{
 		ProjectID:      build.ProjectId,
 		ID:             build.Id,
@@ -287,6 +313,7 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 		Env:            build.Options.Env,
 		LogURL:         logURL,
 		Substitutions:  substitutions,
+		JSON:           buf.String(),
 	}
 	return n.client.WriteRow(ctx, newRow)
 }
@@ -310,14 +337,14 @@ func (bq *actualBQ) EnsureTable(ctx context.Context, tableName string) error {
 	bq.table = bq.dataset.Table(tableName)
 	schema, err := bigquery.InferSchema(bqRow{})
 	if err != nil {
-		return fmt.Errorf("Failed to infer schema: %v", err)
+		return fmt.Errorf("failed to infer schema: %v", err)
 	}
 	metadata, err := bq.dataset.Table(tableName).Metadata(ctx)
 	if err != nil {
 		log.Warningf("Error obtaining table metadata: %q;Creating new BigQuery table: %q", err, tableName)
 		// Create table if it does not exist.
 		if err := bq.table.Create(ctx, &bigquery.TableMetadata{Name: tableName, Description: "BigQuery Notifier Build Data Table", Schema: schema}); err != nil {
-			return fmt.Errorf("Failed to initialize table %v: ", err)
+			return fmt.Errorf("failed to initialize table %v: ", err)
 		}
 	} else if len(metadata.Schema) == 0 {
 		log.Warningf("No schema found for table, writing new schema for table: %v", tableName)
@@ -325,7 +352,7 @@ func (bq *actualBQ) EnsureTable(ctx context.Context, tableName string) error {
 			Schema: schema,
 		}
 		if _, err := bq.table.Update(ctx, update, metadata.ETag); err != nil {
-			return fmt.Errorf("Error: unable to update schema of table: %v", err)
+			return fmt.Errorf("error: unable to update schema of table: %v", err)
 		}
 	}
 
@@ -336,7 +363,7 @@ func (bq *actualBQ) WriteRow(ctx context.Context, row *bqRow) error {
 	ins := bq.table.Inserter()
 	log.V(2).Infof("Writing row: %v", row)
 	if err := ins.Put(ctx, row); err != nil {
-		return fmt.Errorf("Error inserting row into BQ: %v", err)
+		return fmt.Errorf("error inserting row into BQ: %v", err)
 	}
 	return nil
 }
