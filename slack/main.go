@@ -163,16 +163,6 @@ func (s *slackNotifier) SendNotification(ctx context.Context, build *cbpb.Build)
 		log.Infof("Unable to update slack message : %q", err.Error())
 	}
 
-	// Determine if we're done and need to delete the build from google cloud store
-	// NOTE: this may never work because of a race condition on multi-region, but dammit, we'll try!!
-	if shouldDeleteBuildFile(sb) {
-		log.Infof("Deleting the build file: %s", commitSha)
-		err = sc.Bucket(s.storageBucket).Object(getStoragePath(commitSha)).Delete(context.Background())
-		if err != nil {
-			log.Infof("Error deleting the build file: %q", err.Error())
-		}
-	}
-
 	// Update the stored build information
 	err = s.updateCloudStoreFile(sc, commitSha, sb)
 	if err != nil {
@@ -246,18 +236,6 @@ func writeBuildToStorageFile(writer io.Writer, sb storedBuild) error {
 	}
 
 	return err
-}
-
-// shouldDeleteBuildFile return false if one of the builds is still in progress
-func shouldDeleteBuildFile(sb storedBuild) bool {
-	for _, build := range sb.Build {
-		// If we are still working on the build/deploy
-		if statusInProgress(build.Status) {
-			// Do not delete the build message yet from GCP
-			return false
-		}
-	}
-	return true
 }
 
 // statusInProgress checks if the given status is an "in progress" status
