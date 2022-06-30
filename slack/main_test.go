@@ -3,10 +3,12 @@ package main
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/slack-go/slack"
 	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestGetStoragePath(t *testing.T) {
@@ -63,9 +65,11 @@ func TestSingleBuildAttachmentMessageOption(t *testing.T) {
 
 func TestMultiRegionSuccessBuildAttachmentMessageOption(t *testing.T) {
 	b1 := &cbpb.Build{
-		ProjectId: "my-project-id",
-		Id:        "some-build-id1",
-		Status:    cbpb.Build_SUCCESS,
+		ProjectId:      "my-project-id",
+		Id:             "some-build-id1",
+		Status:         cbpb.Build_SUCCESS,
+		BuildTriggerId: "build-trigger-id1",
+		CreateTime:     timestamppb.Now(),
 		Substitutions: map[string]string{
 			repoNameSub:       "test-repo",
 			branchNameSub:     "test-branch",
@@ -78,9 +82,11 @@ func TestMultiRegionSuccessBuildAttachmentMessageOption(t *testing.T) {
 	}
 
 	b2 := &cbpb.Build{
-		ProjectId: "my-project-id",
-		Id:        "some-build-id2",
-		Status:    cbpb.Build_SUCCESS,
+		ProjectId:      "my-project-id",
+		Id:             "some-build-id2",
+		Status:         cbpb.Build_SUCCESS,
+		BuildTriggerId: "build-trigger-id2",
+		CreateTime:     timestamppb.Now(),
 		Substitutions: map[string]string{
 			repoNameSub:       "test-repo",
 			branchNameSub:     "test-branch",
@@ -136,9 +142,11 @@ func TestMultiRegionSuccessBuildAttachmentMessageOption(t *testing.T) {
 
 func TestMultiRegionFailBuildAttachmentMessageOption(t *testing.T) {
 	b1 := &cbpb.Build{
-		ProjectId: "my-project-id",
-		Id:        "some-build-id1",
-		Status:    cbpb.Build_FAILURE,
+		ProjectId:      "my-project-id",
+		Id:             "some-build-id1",
+		Status:         cbpb.Build_FAILURE,
+		BuildTriggerId: "build-trigger-id1",
+		CreateTime:     timestamppb.Now(),
 		Substitutions: map[string]string{
 			repoNameSub:       "test-repo",
 			branchNameSub:     "test-branch",
@@ -151,9 +159,141 @@ func TestMultiRegionFailBuildAttachmentMessageOption(t *testing.T) {
 	}
 
 	b2 := &cbpb.Build{
-		ProjectId: "my-project-id",
-		Id:        "some-build-id2",
-		Status:    cbpb.Build_SUCCESS,
+		ProjectId:      "my-project-id",
+		Id:             "some-build-id2",
+		Status:         cbpb.Build_SUCCESS,
+		BuildTriggerId: "build-trigger-id2",
+		CreateTime:     timestamppb.Now(),
+		Substitutions: map[string]string{
+			repoNameSub:       "test-repo",
+			branchNameSub:     "test-branch",
+			commitShortShaSub: "1234successsha",
+			commitMsgSub:      "success message",
+			commitURLSub:      "https://some.example.com/successcommit",
+			commitAuthorSub:   "successperson",
+		},
+		LogUrl: "https://some.example.com/log/url?foo=success",
+	}
+
+	sb := storedBuild{
+		Build: map[string]*cbpb.Build{
+			b1.Id: b1,
+			b2.Id: b2,
+		},
+	}
+
+	got := buildAttachmentMessageOption(sb)
+
+	want := slack.MsgOptionAttachments(
+		slack.Attachment{
+			Text:  "FAILURE: :test-repo: test-repo (my-project-id) \u003chttps://some.example.com/log/url?foo=fail\u0026utm_campaign=google-cloud-build-notifiers\u0026utm_medium=chat\u0026utm_source=google-cloud-build|View Build\u003e\n*Branch*: test-branch *Author*: failperson \n\u003chttps://some.example.com/failcommit|Commit\u003e *1234failsha*: fail message",
+			Color: "danger",
+		},
+	)
+
+	_, gotValues, err := slack.UnsafeApplyMsgOptions("fake-token", "fake-channel", "https://fake.com/", *got)
+	if err != nil {
+		t.Errorf("Unable to build message: %s", err.Error())
+	}
+	_, wantValues, err := slack.UnsafeApplyMsgOptions("fake-token", "fake-channel", "https://fake.com/", want)
+	if diff := cmp.Diff(gotValues, wantValues); diff != "" {
+		t.Logf("full message: %+v", gotValues)
+		t.Errorf("writeMessage got unexpected diff: %s", diff)
+	}
+	return
+}
+
+func TestSuccessMultiBuildTrigger(t *testing.T) {
+	createTime := time.Now()
+	createTimeMoreRecent := createTime.Add(time.Minute * time.Duration(1))
+	b1 := &cbpb.Build{
+		ProjectId:      "my-project-id",
+		Id:             "some-build-id1",
+		Status:         cbpb.Build_FAILURE,
+		BuildTriggerId: "build-trigger-id1",
+		CreateTime:     timestamppb.New(createTime),
+		Substitutions: map[string]string{
+			repoNameSub:       "test-repo",
+			branchNameSub:     "test-branch",
+			commitShortShaSub: "1234failsha",
+			commitMsgSub:      "fail message",
+			commitURLSub:      "https://some.example.com/failcommit",
+			commitAuthorSub:   "failperson",
+		},
+		LogUrl: "https://some.example.com/log/url?foo=fail",
+	}
+
+	b2 := &cbpb.Build{
+		ProjectId:      "my-project-id",
+		Id:             "some-build-id2",
+		Status:         cbpb.Build_SUCCESS,
+		BuildTriggerId: "build-trigger-id1",
+		CreateTime:     timestamppb.New(createTimeMoreRecent),
+		Substitutions: map[string]string{
+			repoNameSub:       "test-repo",
+			branchNameSub:     "test-branch",
+			commitShortShaSub: "1234successsha",
+			commitMsgSub:      "success message",
+			commitURLSub:      "https://some.example.com/successcommit",
+			commitAuthorSub:   "successperson",
+		},
+		LogUrl: "https://some.example.com/log/url?foo=success",
+	}
+
+	sb := storedBuild{
+		Build: map[string]*cbpb.Build{
+			b1.Id: b1,
+			b2.Id: b2,
+		},
+	}
+
+	got := buildAttachmentMessageOption(sb)
+
+	want := slack.MsgOptionAttachments(
+		slack.Attachment{
+			Text:  "SUCCESS: :test-repo: test-repo (my-project-id) \u003chttps://some.example.com/log/url?foo=success\u0026utm_campaign=google-cloud-build-notifiers\u0026utm_medium=chat\u0026utm_source=google-cloud-build|View Build\u003e\n*Branch*: test-branch *Author*: successperson \n\u003chttps://some.example.com/successcommit|Commit\u003e *1234successsha*: success message",
+			Color: "good",
+		},
+	)
+
+	_, gotValues, err := slack.UnsafeApplyMsgOptions("fake-token", "fake-channel", "https://fake.com/", *got)
+	if err != nil {
+		t.Errorf("Unable to build message: %s", err.Error())
+	}
+	_, wantValues, err := slack.UnsafeApplyMsgOptions("fake-token", "fake-channel", "https://fake.com/", want)
+	if diff := cmp.Diff(gotValues, wantValues); diff != "" {
+		t.Logf("full message: %+v", gotValues)
+		t.Errorf("writeMessage got unexpected diff: %s", diff)
+	}
+	return
+}
+
+func TestFailMultiBuildTrigger(t *testing.T) {
+	createTime := time.Now()
+	createTimeMoreRecent := createTime.Add(time.Minute * time.Duration(1))
+	b1 := &cbpb.Build{
+		ProjectId:      "my-project-id",
+		Id:             "some-build-id1",
+		Status:         cbpb.Build_FAILURE,
+		BuildTriggerId: "build-trigger-id1",
+		CreateTime:     timestamppb.New(createTimeMoreRecent),
+		Substitutions: map[string]string{
+			repoNameSub:       "test-repo",
+			branchNameSub:     "test-branch",
+			commitShortShaSub: "1234failsha",
+			commitMsgSub:      "fail message",
+			commitURLSub:      "https://some.example.com/failcommit",
+			commitAuthorSub:   "failperson",
+		},
+		LogUrl: "https://some.example.com/log/url?foo=fail",
+	}
+
+	b2 := &cbpb.Build{
+		ProjectId:      "my-project-id",
+		Id:             "some-build-id2",
+		Status:         cbpb.Build_SUCCESS,
+		BuildTriggerId: "build-trigger-id1",
+		CreateTime:     timestamppb.New(createTime),
 		Substitutions: map[string]string{
 			repoNameSub:       "test-repo",
 			branchNameSub:     "test-branch",

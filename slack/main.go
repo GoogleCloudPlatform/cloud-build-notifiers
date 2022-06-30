@@ -269,7 +269,8 @@ func buildAttachmentMessageOption(sb storedBuild) *slack.MsgOption {
 	// Look at all the builds
 	// (named this loop as buildLoop so we can break out of it in the switch case)
 buildLoop:
-	for _, build := range sb.Build {
+	// Loop through the most recent builds for each build trigger
+	for _, build := range getMostRecentBuilds(sb.Build) {
 		// Check all the build substition info fields
 		for key := range buildInfo {
 			// If there is a value for that build key in the build info
@@ -329,4 +330,28 @@ buildLoop:
 
 	attachmentMsgOption := slack.MsgOptionAttachments(attachment)
 	return &attachmentMsgOption
+}
+
+// getMostRecentBuilds finds the most recent builds for each build trigger
+// triggers being a build or deploy trigger or some kind of build event trigger
+func getMostRecentBuilds(builds map[string]*cbpb.Build) map[string]*cbpb.Build {
+	mostRecentBuilds := map[string]*cbpb.Build{}
+
+	// Loop through all the builds
+	for _, build := range builds {
+		// See if we already have a more recent build for that build trigger
+		if previousBuild, ok := mostRecentBuilds[build.BuildTriggerId]; ok {
+			// If this build is more recent than the other build
+			if build.CreateTime.Seconds > previousBuild.CreateTime.Seconds {
+				// Replace the previous build with this more recent build
+				mostRecentBuilds[build.BuildTriggerId] = build
+			}
+			// Done examinging this build
+			continue
+		}
+		// No build stored for this build trigger yet. store it
+		mostRecentBuilds[build.BuildTriggerId] = build
+	}
+
+	return mostRecentBuilds
 }
