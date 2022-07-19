@@ -108,6 +108,12 @@ main() {
     --format="value(projectNumber)") ||
     fail "could not get project number"
 
+  # Region, from Cloud Run configuration
+  REGION=$(gcloud config get-value run/region)
+  if [ "${REGION}" = "" ] || [ "${REGION}" = "(unset)" ]; then
+    fail "default cloud run region not set; run \"gcloud config set run/region <region>\""
+  fi
+
   REQUIRED_SERVICES=('cloudbuild.googleapis.com' 'run.googleapis.com' 'pubsub.googleapis.com')
   SOURCE_CONFIG_BASENAME=$(basename "${SOURCE_CONFIG_PATH}")
   DESTINATION_BUCKET_NAME="${PROJECT_ID}-notifiers-config"
