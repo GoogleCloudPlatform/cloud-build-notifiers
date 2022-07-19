@@ -28,14 +28,15 @@ the repo) are:
 
 Usage [in the cloud-build-notifiers repo root]:
 
-./setup.sh <notifier-type> <local-config-path> [secret-name]
+./setup.sh <notifier-type> <local-config-path> [-s secret-name] [-t local-template-path]
 
 Concrete example:
 
 ./setup.sh \
   smtp \
   ~/notifier-configs/my-smtp-config.yaml \
-  my-smtp-password
+  -s my-smtp-password \
+  -t ~/notifier-configs/my-smtp-template.yaml
 
 For help/usage:
 
@@ -47,13 +48,29 @@ main() {
   if [ "$*" = "--help" ]; then
     echo "${HELP}"
     exit 0
-  elif [ $# -lt 2 ] || [ $# -gt 3 ]; then
+  elif [ $# -lt 2 ]; then
     fail "${HELP}"
   fi
 
+  SECRET_NAME=""
+  SOURCE_TEMPLATE_PATH=""
+
+  while [ $OPTIND -le "$#" ]
+  do
+    if getopts s:t: option
+    then
+        case $option
+        in
+            s) SECRET_NAME="$OPTARG";;
+            t) SOURCE_TEMPLATE_PATH="$OPTARG";;
+        esac
+    else
+        ((OPTIND++))
+    fi
+  done
+
   NOTIFIER_TYPE="$1"
   SOURCE_CONFIG_PATH="$2"
-  SECRET_NAME="${3:-}" # Optional secret_name name.
 
   # Check that the user is using a supported notifier type in the correct
   # directory.
@@ -70,10 +87,16 @@ main() {
     fail "expected file at local source config path ${SOURCE_CONFIG_PATH} to be readable"
   fi
 
+  if [ ! -z "${SOURCE_TEMPLATE_PATH}" ]; then
+    if [ ! -r "${SOURCE_TEMPLATE_PATH}" ]; then
+        fail "expected file at local source template path ${SOURCE_TEMPLATE_PATH} to be readable"
+    fi
+  fi
+
   # Project ID, assumed to NOT be org-scoped (only alphanumeric and dashes).
   PROJECT_ID=$(gcloud config get-value project) ||
     fail "could not get default project"
-  if [ "${PROJECT_ID}" = "(unset)" ]; then
+  if [ "${PROJECT_ID}" = "" ] || [ "${PROJECT_ID}" = "(unset)" ]; then
     fail "default project not set; run \"gcloud config set project <project_id>\"" \
       "or set the CLOUDSDK_CORE_PROJECT environment variable"
   fi
@@ -90,6 +113,8 @@ main() {
   DESTINATION_BUCKET_NAME="${PROJECT_ID}-notifiers-config"
   DESTINATION_BUCKET_URI="gs://${DESTINATION_BUCKET_NAME}"
   DESTINATION_CONFIG_PATH="${DESTINATION_BUCKET_URI}/${SOURCE_CONFIG_BASENAME}"
+  SOURCE_TEMPLATE_BASENAME=$(basename "${SOURCE_TEMPLATE_PATH}")
+  DESTINATION_TEMPLATE_PATH="${DESTINATION_BUCKET_URI}/${SOURCE_TEMPLATE_BASENAME}"
   IMAGE_PATH="us-east1-docker.pkg.dev/gcb-release/cloud-build-notifiers/${NOTIFIER_TYPE}:latest"
   SERVICE_NAME="${NOTIFIER_TYPE}-notifier"
   SUBSCRIPTION_NAME="${NOTIFIER_TYPE}-subscription"
@@ -154,6 +179,12 @@ upload_config() {
 
   gsutil cp "${SOURCE_CONFIG_PATH}" "${DESTINATION_CONFIG_PATH}" ||
     fail "failed to copy config to GCS"
+
+  if [ ! -z "${SOURCE_TEMPLATE_PATH}" ]; then
+    gsutil cp "${SOURCE_TEMPLATE_PATH}" "${DESTINATION_TEMPLATE_PATH}" ||
+      fail "failed to copy template to GCS"
+  fi
+
 }
 
 deploy_notifier() {
