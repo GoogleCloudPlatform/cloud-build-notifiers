@@ -1,5 +1,4 @@
 {
-    "title": "Cloud Build [{{.Build.ProjectId}}] {{.Build.BuildTriggerId}}: {{.Build.Status}}",
-    "body": "Cloud Build {{.Build.ProjectId}} {{.Build.BuildTriggerId}} status: **{{.Build.Status}}**\n\n[View Logs]({{.Build.LogUrl}})"
+    "title": "Cloud Build [{{.Build.ProjectId}}]: {{.Build.Status}}",
+    "body": "Cloud Build {{.Build.ProjectId}} {{.Build.Id}} status: **{{.Build.Status}}**\n\n{{if .Build.BuildTriggerId}}Trigger ID: {{.Build.BuildTriggerId}}{{end}}\n\n[View Logs]({{.Build.LogUrl}})"
 }
-
