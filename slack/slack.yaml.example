@@ -22,6 +22,10 @@ spec:
     delivery:
       webhookUrl:
         secretRef: webhook-url
+    template:
+      type: golang
+      uri: gs://example-gcs-bucket/slack.json
+      
   secrets:
   - name: webhook-url
     value: projects/example-project/secrets/example-slack-notifier-webhook-url/versions/latest
