@@ -130,6 +130,7 @@ main() {
   PUBSUB_SA="service-${PROJECT_NUMBER}@gcp-sa-pubsub.iam.gserviceaccount.com"
 
   # Edge case: pubsub subscriptions cannot start with certain strings.
+  # https://cloud.google.com/pubsub/docs/admin#resource_names
   if [ "${NOTIFIER_TYPE}" = "googlechat" ]; then
     SUBSCRIPTION_NAME="sub-${SUBSCRIPTION_NAME}"
   fi
