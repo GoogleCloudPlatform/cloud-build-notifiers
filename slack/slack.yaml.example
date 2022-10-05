@@ -19,6 +19,8 @@ metadata:
 spec:
   notification:
     filter: build.status == Build.Status.SUCCESS
+    params: 
+      buildStatus: $(build.status)
     delivery:
       webhookUrl:
         secretRef: webhook-url
