@@ -3,7 +3,7 @@
       "type": "section",
       "text": {
         "type": "mrkdwn",
-        "text": "Cloud Build {{.Build.ProjectId}} {{.Build.Id}} {{.Build.Status}}"
+        "text": "Cloud Build {{.Build.ProjectId}} {{.Build.Id}} {{.Params.buildStatus}}"
       }
     },
     {
