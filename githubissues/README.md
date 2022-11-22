@@ -19,3 +19,4 @@ This notifier expects the following fields in the `delivery` map to be set:
 
 This notifier also takes a custom `template` that can either be set inline, or as a uri, as a
 JSON object specifying at minimum the customisable `title` and `body` (in Markdown) of the issue. See [GitHub's REST documentation](https://docs.github.com/en/rest/issues/issues#create-an-issue) for more body parameters. See TODO for more on templates.
+
