@@ -1,0 +1,54 @@
+[
+  {
+    "type": "section",
+    "text": {
+      "type": "mrkdwn",
+      "text": "Cloud Build build state *{{.Params.buildStatus}}*. {{ if eq .Params.buildStatus `SUCCESS` }}✅{{ else }}❌{{ end }}"
+    }
+  },
+  {
+    "type": "section",
+    "text": {
+      "type": "mrkdwn",
+      "text": "*Trigger:* {{.Params.buildTriggerName}}"
+    }
+  },
+  {
+    "type": "section",
+    "fields": [
+      {
+        "type": "mrkdwn",
+        "text": "*ProjectId:*\n{{.Build.ProjectId}}"
+      },
+      {
+        "type": "mrkdwn",
+        "text": "*Repository:*\n{{.Params.buildRepository}}"
+      },
+      {
+        "type": "mrkdwn",
+        "text": "*Branch:*\n{{.Params.buildBranch}}"
+      },
+      {
+        "type": "mrkdwn",
+        "text": "*Commit:*\n{{.Params.buildCommit}}"
+      }
+    ]
+  },
+  {
+    "type": "divider"
+  },
+  {
+    "type": "actions",
+    "elements": [
+      {
+        "type": "button",
+        "text": {
+          "type": "plain_text",
+          "text": "View Build Logs"
+        },
+        "value": "click_me_123",
+        "url": "{{.Build.LogUrl}}"
+      }
+    ]
+  }
+]

@@ -1,0 +1,37 @@
+# Copyright 2020 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: cloud-build-notifiers/v1
+kind: SlackNotifier
+metadata:
+  name: cloudbuid-slack-notifier
+spec:
+  notification:
+    filter: build.status in [Build.Status.SUCCESS, Build.Status.FAILURE, Build.Status.INTERNAL_ERROR, Build.Status.TIMEOUT]
+    params: 
+      buildStatus: $(build.status)
+      buildTriggerName: $(build.substitutions['TRIGGER_NAME'])
+      buildRepository: $(build.substitutions['REPO_NAME'])
+      buildBranch: $(build.substitutions['BRANCH_NAME'])
+      buildCommit: $(build.substitutions['SHORT_SHA'])
+    delivery:
+      webhookUrl:
+        secretRef: webhook-url
+    template:
+      type: golang
+      uri: gs://repro-booster-production-notifiers-config/slack.json
+  secrets:
+  - name: webhook-url
+    value: projects/example-project/secrets/example-slack-notifier-webhook-url/versions/latest
+    value: projects/repro-booster-production/secrets/cloudbuild_slack_notifier_webhook_url/versions/latest
