@@ -105,14 +105,15 @@ func (s *slackNotifier) writeMessage() (*slack.WebhookMessage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to add UTM params: %w", err)
 	}
+
 	var clr string
 	switch build.Status {
 	case cbpb.Build_SUCCESS:
-		clr = "good"
+		clr = "#22bb33"
 	case cbpb.Build_FAILURE, cbpb.Build_INTERNAL_ERROR, cbpb.Build_TIMEOUT:
-		clr = "danger"
+		clr = "#bb2124"
 	default:
-		clr = "warning"
+		clr = "#f0ad4e"
 	}
 
 	var buf bytes.Buffer
@@ -126,5 +127,5 @@ func (s *slackNotifier) writeMessage() (*slack.WebhookMessage, error) {
 		return nil, fmt.Errorf("failed to unmarshal templating JSON: %w", err)
 	}
 
-	return &slack.WebhookMessage{Attachments: []slack.Attachment{{Color: clr}}, Blocks: &blocks}, nil
+	return &slack.WebhookMessage{Attachments: []slack.Attachment{{Color: clr, Blocks: blocks}}}, nil
 }
