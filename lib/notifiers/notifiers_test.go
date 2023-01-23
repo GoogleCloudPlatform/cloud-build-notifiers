@@ -302,7 +302,10 @@ func TestGetGCSConfig(t *testing.T) {
 	validYAML := strings.ReplaceAll(validConfigYAMLWithTabs, "\t", "    " /* 4 spaces */)
 	validFakeFactory := &fakeGCSReaderFactory{
 		data: map[string]string{
-			"gs://path/to/my/config.yaml": validYAML,
+			"gs://path/to/my/config.yaml":                 validYAML,
+			"gs://bucket-with-dash/dir/config.yaml":       validYAML,
+			"gs://bucket.with.dot/dir/config.yaml":        validYAML,
+			"gs://bucket_with_underscore/dir/config.yaml": validYAML,
 		},
 	}
 
@@ -319,6 +322,22 @@ func TestGetGCSConfig(t *testing.T) {
 			fake:       validFakeFactory,
 			wantConfig: validConfig,
 		}, {
+			name:       "valid and present config in bucket with dashes",
+			path:       "gs://bucket-with-dash/dir/config.yaml",
+			fake:       validFakeFactory,
+			wantConfig: validConfig,
+		}, {
+			name:       "valid and present config in bucket with dots",
+			path:       "gs://bucket.with.dot/dir/config.yaml",
+			fake:       validFakeFactory,
+			wantConfig: validConfig,
+		}, {
+			name:       "valid and present config in bucket with underscores",
+			path:       "gs://bucket_with_underscore/dir/config.yaml",
+			fake:       validFakeFactory,
+			wantConfig: validConfig,
+		}, {
+
 			name:      "bad path",
 			path:      "gs://path/to/nowhere.yaml",
 			fake:      validFakeFactory,

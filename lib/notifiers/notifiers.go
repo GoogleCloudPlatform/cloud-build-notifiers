@@ -67,7 +67,7 @@ var (
 )
 
 var (
-	gcsConfigPattern = regexp.MustCompile(`^gs://([[\w-]+)/([^\\]+$)`)
+	gcsConfigPattern = regexp.MustCompile(`^gs://([[\w-_.]+)/([^\\]+$)`)
 )
 
 // Config is the common type for (YAML-based) configuration files for notifications.
