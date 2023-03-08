@@ -27,3 +27,6 @@ gcloud run deploy service-name \
    --no-allow-unauthenticated \
    --update-env-vars=CONFIG_PATH=config-path,PROJECT_ID=project-id
 ```
+## Slack BlockKit Template Functions
+- The `replace` function allows replacement of substrings in any {{template variables}} in the .json Slack template. (For example, the variable `.Build.FailureInfo.Detail` contains double quotes, which breaks the BlockKitTemplate parsing.)
+   - Usage: `{{replace .Build.FailureInfo.Detail "\"" "'"}}`

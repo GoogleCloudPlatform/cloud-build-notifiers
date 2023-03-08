@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 	"text/template"
+	"strings"
 
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	"github.com/google/go-cmp/cmp"
@@ -37,13 +38,17 @@ func TestWriteMessage(t *testing.T) {
 			  "text": "Logs"
 			},
 			"value": "click_me_123",
-			"url": "{{.Build.LogUrl}}",
+			"url": "{{replace .Build.LogUrl "\"" "'"}}",
 			"action_id": "button-action"
 		  }
 		}
 	  ]`
 
-	tmpl, err := template.New("blockkit_template").Parse(blockKitTemplate)
+	tmpl, err := template.New("blockkit_template").Funcs(template.FuncMap{
+		"replace": func(s, old, new string) string {
+			return strings.ReplaceAll(s, old, new)
+		},
+	}).Parse(blockKitTemplate)
 	if err != nil {
 		t.Fatalf("failed to parse template: %v", err)
 	}
@@ -52,7 +57,7 @@ func TestWriteMessage(t *testing.T) {
 		ProjectId: "my-project-id",
 		Id:        "some-build-id",
 		Status:    cbpb.Build_SUCCESS,
-		LogUrl:    "https://some.example.com/log/url?foo=bar",
+		LogUrl:    "https://some.example.com/log/url?foo=bar\"",
 	}}}
 
 	got, err := n.writeMessage()
@@ -85,7 +90,7 @@ func TestWriteMessage(t *testing.T) {
 							Type:     "button",
 							Text:     &slack.TextBlockObject{Type: "plain_text", Text: "Logs"},
 							ActionID: "button-action",
-							URL:      "https://some.example.com/log/url?foo=bar",
+							URL:      "https://some.example.com/log/url?foo=bar'",
 							Value:    "click_me_123",
 						}},
 					},
