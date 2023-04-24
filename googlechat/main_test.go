@@ -3,9 +3,9 @@ package main
 import (
 	"testing"
 
+	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/google/go-cmp/cmp"
 	chat "google.golang.org/api/chat/v1"
-	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 )
 
 func TestWriteMessage(t *testing.T) {
