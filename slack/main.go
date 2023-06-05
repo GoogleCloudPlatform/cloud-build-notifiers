@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"text/template"
+	"strings"
 
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
@@ -64,7 +65,12 @@ func (s *slackNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, blockK
 		return fmt.Errorf("failed to get token secret: %w", err)
 	}
 	s.webhookURL = wu
-	tmpl, err := template.New("blockkit_template").Parse(blockKitTemplate)
+	tmpl, err := template.New("blockkit_template").Funcs(template.FuncMap{
+		"replace": func(s, old, new string) string {
+			return strings.ReplaceAll(s, old, new)
+		},
+	}).Parse(blockKitTemplate)
+
 	s.tmpl = tmpl
 	s.br = br
 
