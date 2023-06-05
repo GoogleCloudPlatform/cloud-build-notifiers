@@ -23,9 +23,9 @@ import (
 	"strings"
 	"text/template"
 
+	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
-	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 )
 
 func main() {
