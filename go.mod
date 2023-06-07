@@ -28,7 +28,6 @@ require (
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/golang/glog v1.1.1
 	github.com/golang/mock v1.6.0 // indirect
-	github.com/golang/protobuf v1.5.3
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/cel-go v0.7.3
 	github.com/google/flatbuffers v23.3.3+incompatible // indirect
@@ -63,6 +62,7 @@ require (
 	golang.org/x/tools v0.8.0 // indirect
 	gonum.org/v1/gonum v0.11.0 // indirect
 	google.golang.org/api v0.125.0
+	google.golang.org/genproto v0.0.0-20230530153820-e85fd2cbaebc // indirect
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.1.0 // indirect
 	google.golang.org/protobuf v1.30.0
 	gopkg.in/yaml.v2 v2.4.0
