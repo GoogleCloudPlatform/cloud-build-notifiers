@@ -36,7 +36,9 @@ import (
 	smpb "cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"cloud.google.com/go/storage"
 	log "github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/protoadapt"
+	"google.golang.org/protobuf/encoding/prototext"
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -529,7 +531,7 @@ func newReceiver(notifier Notifier, params *receiverParams) http.HandlerFunc {
 			AllowPartial:   true,
 			DiscardUnknown: true,
 		}
-		bv2 := proto.MessageV2(build)
+		bv2 := protoadapt.MessageV2Of(build)
 		if err := uo.Unmarshal(pspw.Message.Data, bv2); err != nil {
 			if params.ignoreBadMessages {
 				log.Warningf("not attempting to handle unmarshal-able Pub/Sub message id=%q data=%q publishTime=%q which gave error: %v",
@@ -542,16 +544,16 @@ func newReceiver(notifier Notifier, params *receiverParams) http.HandlerFunc {
 			http.Error(w, "Bad Cloud Build Pub/Sub data", http.StatusBadRequest)
 			return
 		}
-		build = proto.MessageV1(bv2).(*cbpb.Build)
+		build = protoadapt.MessageV1Of(bv2).(*cbpb.Build)
 
-		log.V(2).Infof("got PubSub Build payload:\n%+v\nattempting to send notification", proto.MarshalTextString(build))
+		log.V(2).Infof("got PubSub Build payload:\n%+v\nattempting to send notification", prototext.Format(build))
 		if err := notifier.SendNotification(ctx, build); err != nil {
 			log.Errorf("failed to run SendNotification: %v", err)
 			http.Error(w, "failed to send notification", http.StatusInternalServerError)
 			return
 		}
 
-		log.V(2).Infof("acking PubSub message %q with Build payload:\n%v", pspw.Message.ID, proto.MarshalTextString(build))
+		log.V(2).Infof("acking PubSub message %q with Build payload:\n%v", pspw.Message.ID, prototext.Format(build))
 	}
 }
 
