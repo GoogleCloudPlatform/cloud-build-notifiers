@@ -193,6 +193,9 @@ func (n *bqNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, bigQueryJ
 }
 
 func parsePBTime(time *timestamppb.Timestamp) (civil.DateTime, error) {
+	if time == nil {
+		return civil.DateTime{}, fmt.Errorf("timestamp is nil")
+	}
 	newTime := time.AsTime()
 	return civil.DateTimeOf(newTime), nil
 }
