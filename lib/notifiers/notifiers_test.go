@@ -29,7 +29,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/protoadapt"
+	"google.golang.org/protobuf/protoadapt"
 
 	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"google.golang.org/protobuf/proto"
@@ -45,7 +45,7 @@ func convertToTimestamp(t *testing.T, datetime string) *timestamppb.Timestamp {
 	if err != nil {
 		t.Fatalf("Failed to parse datetime string: %v", err)
 	}
-	ppbtimestamp := timestamp.asTime()
+	ppbtimestamp := timestamppb.New(timestamp)
 	return ppbtimestamp
 }
 
@@ -743,7 +743,7 @@ func wrapperToBuffer(t *testing.T, w *pubSubPushWrapper) *bytes.Buffer {
 
 func buildToBuffer(t *testing.T, b *cbpb.Build) *bytes.Buffer {
 	t.Helper()
-	b2 := protodapt.MessageV2Of(b)
+	b2 := protoadapt.MessageV2Of(b)
 	j, err := protojson.Marshal(b2)
 	if err != nil {
 		t.Fatal(err)
