@@ -18,8 +18,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"text/template"
 	"strings"
+	"text/template"
 
 	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"

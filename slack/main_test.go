@@ -1,9 +1,9 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"text/template"
-	"strings"
 
 	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
