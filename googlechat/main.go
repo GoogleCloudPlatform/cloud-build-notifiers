@@ -25,7 +25,7 @@ import (
 	log "github.com/golang/glog"
 	chat "google.golang.org/api/chat/v1"
 
-	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
+	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 )
 
 const (
