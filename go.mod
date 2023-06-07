@@ -13,7 +13,6 @@ require (
 	cloud.google.com/go/secretmanager v1.10.0
 	cloud.google.com/go/storage v1.30.1
 	github.com/andybalholm/brotli v1.0.5 // indirect
-	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230321174746-8dcc6526cfb1 // indirect
 	github.com/apache/thrift v0.18.1 // indirect
 	github.com/docker/cli v23.0.4+incompatible // indirect
 	github.com/docker/docker v23.0.4+incompatible // indirect
