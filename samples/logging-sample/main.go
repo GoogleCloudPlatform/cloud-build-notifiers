@@ -23,6 +23,7 @@ import (
 	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
+	"google.golang.org/protobuf/encoding/prototext"
 )
 
 // [END cloudbuild_logging_sample_imports]
