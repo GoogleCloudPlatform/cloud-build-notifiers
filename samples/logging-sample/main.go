@@ -58,7 +58,7 @@ func (h *logger) SendNotification(ctx context.Context, build *cbpb.Build) error 
 	// Include custom functionality here.
 	// This example logs the build.
 	if h.filter.Apply(ctx, build) {
-		log.V(1).Infof("printing build\n%s", proto.MarshalTextString(build))
+		log.V(1).Infof("printing build\n%s", prototext.Format(build))
 	} else {
 		log.V(1).Infof("build (%q, %q) did NOT match CEL filter", build.ProjectId, build.Id)
 	}
