@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/google/go-cmp/cmp"
-	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 )
 
 func TestNewResolver(t *testing.T) {

@@ -23,10 +23,10 @@ import (
 	"net/smtp"
 	"strings"
 
+	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
-	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
+	"google.golang.org/protobuf/encoding/prototext"
 )
 
 const (
@@ -135,7 +135,7 @@ func getMailConfig(ctx context.Context, sg notifiers.SecretGetter, spec *notifie
 
 func (s *smtpNotifier) SendNotification(ctx context.Context, build *cbpb.Build) error {
 	if !s.filter.Apply(ctx, build) {
-		log.V(2).Infof("no mail for event:\n%s", proto.MarshalTextString(build))
+		log.V(2).Infof("no mail for event:\n%s", prototext.Format(build))
 		return nil
 	}
 	bindings, err := s.br.Resolve(ctx, nil, build)
