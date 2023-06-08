@@ -28,4 +28,6 @@ require (
 	google.golang.org/protobuf v1.30.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/client-go v0.27.1
+	github.com/docker/cli v23.0.4+incompatible // indirect
+	github.com/docker/docker v23.0.4+incompatible // indirect
 )
