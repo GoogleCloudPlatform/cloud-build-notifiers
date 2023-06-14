@@ -29,12 +29,12 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/protobuf/protoadapt"
+	"github.com/golang/protobuf/ptypes"
 
-	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
-	"google.golang.org/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -45,7 +45,10 @@ func convertToTimestamp(t *testing.T, datetime string) *timestamppb.Timestamp {
 	if err != nil {
 		t.Fatalf("Failed to parse datetime string: %v", err)
 	}
-	ppbtimestamp := timestamppb.New(timestamp)
+	ppbtimestamp, err := ptypes.TimestampProto(timestamp)
+	if err != nil {
+		t.Fatalf("Failed to parse timestamp: %v", err)
+	}
 	return ppbtimestamp
 }
 
@@ -180,6 +183,15 @@ func TestMakeCELPredicate(t *testing.T) {
 			name:      "complex filter with regexp via `matches`",
 			filter:    `build.status in [Build.Status.FAILURE, Build.Status.TIMEOUT] && build.substitutions["TAG_NAME"].matches("^v\\d{1}\\.\\d{1}\\.\\d{3}$")`,
 			build:     &cbpb.Build{Status: cbpb.Build_TIMEOUT, Substitutions: map[string]string{"TAG_NAME": "v1.2.003"}},
+			wantMatch: true,
+		}, {
+			name:      "complex filter with enumeration to sub-object",
+			filter:    `build.steps.filter(step, !step.id.contains("Build") && !step.id.contains("Test")).exists_one(step, step.status in [Build.Status.FAILURE, Build.Status.INTERNAL_ERROR])`,
+			build:     &cbpb.Build{Status: cbpb.Build_FAILURE, Steps: []*cbpb.BuildStep{
+				&cbpb.BuildStep{Id: "Build", Status: cbpb.Build_FAILURE}, 
+				&cbpb.BuildStep{Id: "Test", Status: cbpb.Build_SUCCESS}, 
+				&cbpb.BuildStep{Id: "Deploy", Status: cbpb.Build_INTERNAL_ERROR},
+			}},
 			wantMatch: true,
 		},
 	} {
@@ -679,7 +691,7 @@ func TestNewReceiver(t *testing.T) {
 		Tags:          []string{t.Name()},
 		Images:        []string{"gcr.io/example/image"},
 	}
-	sentBuildV2 := protoadapt.MessageV2Of(sentBuild)
+	sentBuildV2 := proto.MessageV2(sentBuild)
 	sentJSON, err := protojson.Marshal(sentBuildV2)
 	if err != nil {
 		t.Fatal(err)
@@ -743,7 +755,7 @@ func wrapperToBuffer(t *testing.T, w *pubSubPushWrapper) *bytes.Buffer {
 
 func buildToBuffer(t *testing.T, b *cbpb.Build) *bytes.Buffer {
 	t.Helper()
-	b2 := protoadapt.MessageV2Of(b)
+	b2 := proto.MessageV2(b)
 	j, err := protojson.Marshal(b2)
 	if err != nil {
 		t.Fatal(err)
