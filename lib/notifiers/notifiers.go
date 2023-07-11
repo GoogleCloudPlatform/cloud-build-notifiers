@@ -36,12 +36,12 @@ import (
 	smpb "cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"cloud.google.com/go/storage"
 	log "github.com/golang/glog"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/protoadapt"
-	"google.golang.org/protobuf/encoding/prototext"
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/protoadapt"
 	"gopkg.in/yaml.v2"
 )
 
@@ -453,7 +453,12 @@ func validateConfig(cfg *Config) error {
 }
 
 func validateTemplate(s string) error {
-	_, err := template.New("").Parse(s)
+	_, err := template.New("").Funcs(template.FuncMap{
+		"replace": func(s, old, new string) string {
+			return strings.ReplaceAll(s, old, new)
+		},
+	}).Parse(s)
+
 	return err
 }
 
