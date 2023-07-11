@@ -15,6 +15,7 @@
 FROM golang AS build-env
 COPY . /go-src/
 WORKDIR /go-src/smtp
+ENV CGO_ENABLED=0
 RUN go test /go-src/smtp
 RUN go build -o /go-app .
 
