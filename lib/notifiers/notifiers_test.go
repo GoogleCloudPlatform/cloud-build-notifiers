@@ -32,10 +32,10 @@ import (
 	"google.golang.org/protobuf/protoadapt"
 
 	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
-	"google.golang.org/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -833,9 +833,10 @@ func TestReceiverWithIgnoredBadMessage(t *testing.T) {
 
 func TestParseTemplate(t *testing.T) {
 	ctx := context.Background()
+	validTemplate := `{{.Build.Status}} {{ replace "bye world" "bye" "hello"}}`
 	validFakeFactory := &fakeGCSReaderFactory{
 		data: map[string]string{
-			"gs://path/to/my/template.yaml": "{{.Build.Status}}",
+			"gs://path/to/my/template.yaml": validTemplate,
 		},
 	}
 	for _, tc := range []struct {
@@ -850,14 +851,14 @@ func TestParseTemplate(t *testing.T) {
 				Type: "golang",
 				URI:  "gs://path/to/my/template.yaml",
 			},
-			want: "{{.Build.Status}}",
+			want: validTemplate,
 		}, {
 			name: "valid content",
 			tmpl: &Template{
 				Type:    "golang",
-				Content: "{{.Build.Status}}",
+				Content: validTemplate,
 			},
-			want: "{{.Build.Status}}",
+			want: validTemplate,
 		}, {
 			name: "invalid URI",
 			tmpl: &Template{
