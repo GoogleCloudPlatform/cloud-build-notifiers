@@ -15,5 +15,6 @@
 FROM golang AS build-env
 COPY . /go-src/
 WORKDIR /go-src/lib/notifiers
+ENV CGO_ENABLED=0
 RUN go test /go-src/lib/notifiers
 RUN go build -o /dev/null .

@@ -15,6 +15,7 @@
 FROM golang AS build-env
 COPY . /go-src/
 WORKDIR /go-src/googlechat
+ENV CGO_ENABLED=0
 RUN go test /go-src/googlechat
 RUN go build -o /go-app .
 
