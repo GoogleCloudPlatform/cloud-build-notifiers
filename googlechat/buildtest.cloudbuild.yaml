@@ -1,4 +1,4 @@
-# Copyright 2020 Google LLC
+# Copyright 2022 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,16 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: cloud-build-notifiers/v1
-kind: HTTPNotifier
-metadata:
-  name: example-http-notifier
-spec:
-  notification:
-    filter: build.status == Build.Status.SUCCESS
-    template:
-      type: golang
-      uri: gs://project-name/http.json
-    delivery:
-      # The `http(s)://` protocol prefix is required.
-      url: https://some-endpoint
+steps:
+- name: gcr.io/cloud-builders/docker
+  args:
+  - build
+  - --file=./googlechat/Dockerfile
+  - '.'
+
+tags:
+- cloud-build-notifiers-googlechat

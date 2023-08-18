@@ -15,28 +15,33 @@
 package notifiers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"html/template"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
+	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
+	smpb "cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"cloud.google.com/go/storage"
 	log "github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
-	smpb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1"
-	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/protoadapt"
 	"gopkg.in/yaml.v2"
 )
 
@@ -52,12 +57,19 @@ var (
 	allowedYAMLAPIVersions = map[string]bool{
 		"cloud-build-notifiers/v1": true,
 	}
+	allowedTemplateTypes = map[string]bool{
+		"golang": true,
+	}
 )
 
 // Flags.
 var (
 	smoketest  = flag.Bool("smoketest", false, "If true, Main will simply log the notifier type and exit.")
 	setupCheck = flag.Bool("setup_check", false, "If true, the configuration YAML is read from stdin and notifier.SetUp is called in a faked-out way. The smoketest flag takes priority over this one.")
+)
+
+var (
+	gcsConfigPattern = regexp.MustCompile(`^gs://([[\w-_.]+)/([^\\]+$)`)
 )
 
 // Config is the common type for (YAML-based) configuration files for notifications.
@@ -81,9 +93,28 @@ type Spec struct {
 
 // Notification is the data container for the fields that are relevant to the configuration of sending the notification.
 type Notification struct {
-	Filter        string                 `yaml:"filter"`
-	Delivery      map[string]interface{} `yaml:"delivery"`
-	Substitutions map[string]string      `yaml:"substitutions"`
+	Filter   string                 `yaml:"filter"`
+	Delivery map[string]interface{} `yaml:"delivery"`
+	Params   map[string]string      `yaml:"params"`
+	Template *Template              `yaml:"template"`
+}
+
+type Template struct {
+	Type    string `yaml:"type"`
+	URI     string `yaml:"uri"`
+	Content string `yaml:"content"`
+}
+
+// TemplateView is the data container for the fields relevant to rendering a template
+
+type TemplateView struct {
+	Build  *BuildView        `json:"Build"`
+	Params map[string]string `json:"Params"`
+}
+
+// BuildView is the data container that contains the build
+type BuildView struct {
+	*cbpb.Build
 }
 
 // SecretConfig is the data container used in a Spec.Notification config for referencing a secret in the Spec.Secrets list.
@@ -111,7 +142,7 @@ type pubSubPushWrapper struct {
 
 // Notifier is the interface type that users should implement for usage in Cloud Build notifiers.
 type Notifier interface {
-	SetUp(context.Context, *Config, SecretGetter, BindingResolver) error
+	SetUp(context.Context, *Config, string, SecretGetter, BindingResolver) error
 	SendNotification(context.Context, *cbpb.Build) error
 }
 
@@ -157,7 +188,6 @@ func Main(notifier Notifier) error {
 	if !flag.Parsed() {
 		flag.Parse()
 	}
-
 	if *smoketest {
 		log.V(0).Infof("notifier smoketest: %T", notifier)
 		return nil
@@ -185,7 +215,7 @@ func Main(notifier Notifier) error {
 			return fmt.Errorf("failed to create BindingResolver during setup check: %w", err)
 		}
 
-		if err := notifier.SetUp(ctx, cfg, new(setupCheckSecretGetter), br); err != nil {
+		if err := notifier.SetUp(ctx, cfg, "", new(setupCheckSecretGetter), br); err != nil {
 			return fmt.Errorf("failed to run notifier.SetUp during setup check: %w", err)
 		}
 
@@ -214,10 +244,16 @@ func Main(notifier Notifier) error {
 	if err != nil {
 		return fmt.Errorf("failed to get config from GCS: %w", err)
 	}
+
 	if err := validateConfig(cfg); err != nil {
 		return fmt.Errorf("got invalid config from path %q: %w", cfgPath, err)
 	}
 	log.V(2).Infof("got config from GCS (%q): %+v\n", cfgPath, cfg)
+
+	tmpl, err := parseTemplate(ctx, cfg.Spec.Notification.Template, &actualGCSReaderFactory{sc})
+	if err != nil {
+		return fmt.Errorf("failed to parse template from notiifer spec %q: %w", cfg.Spec.Notification.Template, err)
+	}
 
 	sm := &actualSecretManager{client: smc}
 
@@ -226,7 +262,7 @@ func Main(notifier Notifier) error {
 		return fmt.Errorf("failed to construct a binding resolver: %v", err)
 	}
 
-	if err := notifier.SetUp(ctx, cfg, sm, br); err != nil {
+	if err := notifier.SetUp(ctx, cfg, tmpl, sm, br); err != nil {
 		return fmt.Errorf("failed to call SetUp on notifier: %w", err)
 	}
 
@@ -256,6 +292,29 @@ func Main(notifier Notifier) error {
 
 	// Block on the HTTP's health.
 	return http.ListenAndServe(":"+port, nil)
+}
+
+func parseTemplate(ctx context.Context, tmpl *Template, grf gcsReaderFactory) (string, error) {
+	templateString := ""
+	if tmpl != nil {
+		if _, ok := allowedTemplateTypes[tmpl.Type]; !ok {
+			return "", fmt.Errorf("got invalid Template Type: %v", tmpl.Type)
+		}
+		if tmpl.URI != "" {
+			parsed, err := getGCSTemplate(ctx, grf, tmpl.URI)
+			if err != nil {
+				return "", fmt.Errorf("failed to get template from GCS: %w", err)
+			}
+			templateString = parsed
+		} else {
+			templateString = tmpl.Content
+		}
+		if err := validateTemplate(templateString); err != nil {
+			return "", fmt.Errorf("got invalid template from path %q: %w", tmpl.URI, err)
+		}
+	}
+	return templateString, nil
+
 }
 
 type gcsReaderFactory interface {
@@ -294,20 +353,26 @@ func (c *setupCheckSecretGetter) GetSecret(_ context.Context, name string) (stri
 
 // getGCSConfig fetches the YAML Config file from the given GCS path and returns the parsed Config.
 func getGCSConfig(ctx context.Context, grf gcsReaderFactory, path string) (*Config, error) {
-	if trm := strings.TrimPrefix(path, "gs://"); trm != path {
-		// path started with the prefix
-		path = trm
-	} else {
-		return nil, fmt.Errorf("expected %q to start with `gs://`", path)
+	if !gcsConfigPattern.MatchString(path) {
+		return nil, fmt.Errorf("expected path %q to match pattern %v", path, gcsConfigPattern)
 	}
+	// if trm := strings.TrimPrefix(path, "gs://"); trm != path {
+	// 	// path started with the prefix
+	// 	path = trm
+	// } else {
+	// 	return nil, fmt.Errorf("expected %q to start with `gs://`", path)
+	// }
 
-	split := strings.SplitN(path, "/", 2)
-	log.V(2).Infof("got path split: %+v", split)
-	if len(split) != 2 {
+	// split := strings.SplitN(path, "/", 2)
+	// log.V(2).Infof("got path split: %+v", split)
+	// if len(split) != 2 {
+	// 	return nil, fmt.Errorf("path has incorrect format (expected form: `[gs://]bucket/path/to/object`): %q => %s", path, strings.Join(split, ", "))
+	// }
+	split := gcsConfigPattern.FindStringSubmatch(path)
+	if len(split) != 3 {
 		return nil, fmt.Errorf("path has incorrect format (expected form: `[gs://]bucket/path/to/object`): %q => %s", path, strings.Join(split, ", "))
 	}
-
-	bucket, object := split[0], split[1]
+	bucket, object := split[1], split[2]
 	r, err := grf.NewReader(ctx, bucket, object)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get reader for (bucket=%q, object=%q): %w", bucket, object, err)
@@ -322,11 +387,49 @@ func getGCSConfig(ctx context.Context, grf gcsReaderFactory, path string) (*Conf
 	return cfg, nil
 }
 
+// getGCSConfig fetches the Template file from the given GCS path and returns the parsed Config.
+func getGCSTemplate(ctx context.Context, grf gcsReaderFactory, path string) (string, error) {
+	if trm := strings.TrimPrefix(path, "gs://"); trm != path {
+		// path started with the prefix
+		path = trm
+	} else {
+		return "", fmt.Errorf("expected %q to start with `gs://`", path)
+	}
+
+	split := strings.SplitN(path, "/", 2)
+	log.V(2).Infof("got path split: %+v", split)
+	if len(split) != 2 {
+		return "", fmt.Errorf("path has incorrect format (expected form: `[gs://]bucket/path/to/object`): %q => %s", path, strings.Join(split, ", "))
+	}
+
+	bucket, object := split[0], split[1]
+	r, err := grf.NewReader(ctx, bucket, object)
+	if err != nil {
+		return "", fmt.Errorf("failed to get reader for (bucket=%q, object=%q): %w", bucket, object, err)
+	}
+	defer r.Close()
+	tmpl, err := decodeTemplate(r)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse template at %q: %w", path, err)
+	}
+
+	return tmpl, nil
+}
+
 func decodeConfig(r io.Reader) (*Config, error) {
 	cfg := new(Config)
 	dcd := yaml.NewDecoder(r)
 	dcd.SetStrict(true)
 	return cfg, dcd.Decode(cfg)
+}
+
+func decodeTemplate(r io.Reader) (string, error) {
+	buf := new(bytes.Buffer)
+	_, err := buf.ReadFrom(r)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse template from Template file: %w", err)
+	}
+	return buf.String(), nil
 }
 
 // validateConfig checks the following (or errors):
@@ -346,13 +449,17 @@ func validateConfig(cfg *Config) error {
 		return errors.New("expected config.spec.notification to be present")
 	}
 
-	for n := range cfg.Spec.Notification.Substitutions {
-		if !subNamePattern.MatchString(n) {
-			return fmt.Errorf("expected user-defined substitution %q to match pattern %v", n, subNamePattern)
-		}
-	}
-
 	return nil
+}
+
+func validateTemplate(s string) error {
+	_, err := template.New("").Funcs(template.FuncMap{
+		"replace": func(s, old, new string) string {
+			return strings.ReplaceAll(s, old, new)
+		},
+	}).Parse(s)
+
+	return err
 }
 
 // MakeCELPredicate returns a CELPredicate for the given filter string of CEL code.
@@ -429,7 +536,7 @@ func newReceiver(notifier Notifier, params *receiverParams) http.HandlerFunc {
 			AllowPartial:   true,
 			DiscardUnknown: true,
 		}
-		bv2 := proto.MessageV2(build)
+		bv2 := protoadapt.MessageV2Of(build)
 		if err := uo.Unmarshal(pspw.Message.Data, bv2); err != nil {
 			if params.ignoreBadMessages {
 				log.Warningf("not attempting to handle unmarshal-able Pub/Sub message id=%q data=%q publishTime=%q which gave error: %v",
@@ -442,16 +549,16 @@ func newReceiver(notifier Notifier, params *receiverParams) http.HandlerFunc {
 			http.Error(w, "Bad Cloud Build Pub/Sub data", http.StatusBadRequest)
 			return
 		}
-		build = proto.MessageV1(bv2).(*cbpb.Build)
+		build = protoadapt.MessageV1Of(bv2).(*cbpb.Build)
 
-		log.V(2).Infof("got PubSub Build payload:\n%+v\nattempting to send notification", proto.MarshalTextString(build))
+		log.V(2).Infof("got PubSub Build payload:\n%+v\nattempting to send notification", prototext.Format(build))
 		if err := notifier.SendNotification(ctx, build); err != nil {
 			log.Errorf("failed to run SendNotification: %v", err)
 			http.Error(w, "failed to send notification", http.StatusInternalServerError)
 			return
 		}
 
-		log.V(2).Infof("acking PubSub message %q with Build payload:\n%v", pspw.Message.ID, proto.MarshalTextString(build))
+		log.V(2).Infof("acking PubSub message %q with Build payload:\n%v", pspw.Message.ID, prototext.Format(build))
 	}
 }
 

@@ -1,4 +1,4 @@
-# Copyright 2020 Google LLC
+# Copyright 2022 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
 
 FROM golang AS build-env
 COPY . /go-src/
-WORKDIR /go-src/http
+WORKDIR /go-src/githubissues
 ENV CGO_ENABLED=0
-RUN go test /go-src/http
+RUN go test /go-src/githubissues
 RUN go build -o /go-app .
 
 # From the Cloud Run docs:

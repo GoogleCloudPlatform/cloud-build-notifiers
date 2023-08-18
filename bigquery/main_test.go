@@ -25,12 +25,12 @@ import (
 	"testing"
 
 	"cloud.google.com/go/bigquery"
+	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"google.golang.org/api/googleapi"
-	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -244,7 +244,7 @@ func TestSetUp(t *testing.T) {
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			n := &bqNotifier{bqf: &fakeBQFactory{&fakeBQ{}}}
-			err := n.SetUp(context.Background(), tc.cfg, nil, nil)
+			err := n.SetUp(context.Background(), tc.cfg, "", nil, nil)
 			if err != nil {
 				if tc.wantErr {
 					t.Logf("got expected error: %v", err)
@@ -373,7 +373,7 @@ func TestEnsureFunctions(t *testing.T) {
 		}} {
 		t.Run(tc.name, func(t *testing.T) {
 			n := &bqNotifier{bqf: &fakeBQFactory{&fakeBQ{}}}
-			err := n.SetUp(context.Background(), tc.cfg, nil, nil)
+			err := n.SetUp(context.Background(), tc.cfg, "", nil, nil)
 			if err != nil {
 				if tc.wantErr {
 					t.Logf("got expected error: %v", err)
@@ -581,6 +581,9 @@ func TestSendNotification(t *testing.T) {
 			FinishTime:     timestamppb.Now(),
 			Tags:           []string{},
 			Options:        &cbpb.BuildOptions{Env: []string{}},
+			Steps: []*cbpb.BuildStep{
+				{Status: cbpb.Build_SUCCESS},
+			},
 		},
 		wantErr: true,
 		wantRow: false,
@@ -588,7 +591,7 @@ func TestSendNotification(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fakeBQ := &fakeBQ{}
 			n := &bqNotifier{bqf: &fakeBQFactory{fakeBQ}}
-			err := n.SetUp(context.Background(), tc.cfg, nil, nil)
+			err := n.SetUp(context.Background(), tc.cfg, "{{.Build.Status}}", nil, nil)
 			if err != nil {
 				t.Fatalf("Setup(%v) got unexpected error: %v", tc.cfg, err)
 			}

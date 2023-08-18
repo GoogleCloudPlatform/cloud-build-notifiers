@@ -19,6 +19,32 @@ metadata:
 spec:
   notification:
     filter: build.status == Build.Status.SUCCESS
+    params: 
+      buildStatus: $(build.status)
+    template:
+      type: golang
+      uri: gs://path/to/my/template
+      content: |
+                <html>
+                  <body>
+                  <table>
+                    <tbody>
+                      <tr>
+                          <td>Build Status from Build</td>
+                          <td>{{.Build.Status}}</td>
+                      </tr>
+                      <tr>
+                        <td>Build Status from Params</td>
+                        <td>{{.Params.buildStatus}}</td>
+                    </tr>
+                    <tr>
+                        <td>Build Log from Build</td>
+                        <td>{{.Build.LogUrl}}</td>
+                    </tr>
+                    </tbody>
+                  </table>
+                  </body>
+                </html>
     delivery:
       server: smtp.gmail.com
       port: '587'

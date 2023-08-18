@@ -17,7 +17,7 @@ Cloud Build user and to have the
 [gcloud CLI tool](https://cloud.google.com/sdk/gcloud/) installed and configured
 for your Cloud Build project(s).
 
-There are currently 3 supported notifier types:
+There are currently 4 supported notifier types:
 
 -   [`bigquery`](./bigquery/README.md), which writes Build updates and related
     data to a BigQuery table.

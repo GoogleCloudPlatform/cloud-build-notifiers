@@ -15,13 +15,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"text/template"
+	"strings"
 
+	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
 	"github.com/slack-go/slack"
-	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 )
 
 const (
@@ -35,12 +38,14 @@ func main() {
 }
 
 type slackNotifier struct {
-	filter notifiers.EventFilter
-
+	filter     notifiers.EventFilter
+	tmpl       *template.Template
 	webhookURL string
+	br         notifiers.BindingResolver
+	tmplView   *notifiers.TemplateView
 }
 
-func (s *slackNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg notifiers.SecretGetter, _ notifiers.BindingResolver) error {
+func (s *slackNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, blockKitTemplate string, sg notifiers.SecretGetter, br notifiers.BindingResolver) error {
 	prd, err := notifiers.MakeCELPredicate(cfg.Spec.Notification.Filter)
 	if err != nil {
 		return fmt.Errorf("failed to make a CEL predicate: %w", err)
@@ -60,17 +65,38 @@ func (s *slackNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, sg not
 		return fmt.Errorf("failed to get token secret: %w", err)
 	}
 	s.webhookURL = wu
+	tmpl, err := template.New("blockkit_template").Funcs(template.FuncMap{
+		"replace": func(s, old, new string) string {
+			return strings.ReplaceAll(s, old, new)
+		},
+	}).Parse(blockKitTemplate)
+
+	s.tmpl = tmpl
+	s.br = br
 
 	return nil
 }
 
 func (s *slackNotifier) SendNotification(ctx context.Context, build *cbpb.Build) error {
+
 	if !s.filter.Apply(ctx, build) {
 		return nil
 	}
 
 	log.Infof("sending Slack webhook for Build %q (status: %q)", build.Id, build.Status)
-	msg, err := s.writeMessage(build)
+
+	bindings, err := s.br.Resolve(ctx, nil, build)
+	if err != nil {
+		return fmt.Errorf("failed to resolve bindings: %w", err)
+	}
+
+	s.tmplView = &notifiers.TemplateView{
+		Build:  &notifiers.BuildView{Build: build},
+		Params: bindings,
+	}
+
+	msg, err := s.writeMessage()
+
 	if err != nil {
 		return fmt.Errorf("failed to write Slack message: %w", err)
 	}
@@ -78,38 +104,34 @@ func (s *slackNotifier) SendNotification(ctx context.Context, build *cbpb.Build)
 	return slack.PostWebhook(s.webhookURL, msg)
 }
 
-func (s *slackNotifier) writeMessage(build *cbpb.Build) (*slack.WebhookMessage, error) {
-	txt := fmt.Sprintf(
-		"Cloud Build (%s, %s): %s",
-		build.ProjectId,
-		build.Id,
-		build.Status,
-	)
+func (s *slackNotifier) writeMessage() (*slack.WebhookMessage, error) {
+	build := s.tmplView.Build
+	_, err := notifiers.AddUTMParams(build.LogUrl, notifiers.ChatMedium)
 
-	var clr string
-	switch build.Status {
-	case cbpb.Build_SUCCESS:
-		clr = "good"
-	case cbpb.Build_FAILURE, cbpb.Build_INTERNAL_ERROR, cbpb.Build_TIMEOUT:
-		clr = "danger"
-	default:
-		clr = "warning"
-	}
-
-	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.ChatMedium)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add UTM params: %w", err)
 	}
 
-	atch := slack.Attachment{
-		Text:  txt,
-		Color: clr,
-		Actions: []slack.AttachmentAction{{
-			Text: "View Logs",
-			Type: "button",
-			URL:  logURL,
-		}},
+	var clr string
+	switch build.Status {
+	case cbpb.Build_SUCCESS:
+		clr = "#22bb33"
+	case cbpb.Build_FAILURE, cbpb.Build_INTERNAL_ERROR, cbpb.Build_TIMEOUT:
+		clr = "#bb2124"
+	default:
+		clr = "#f0ad4e"
 	}
 
-	return &slack.WebhookMessage{Attachments: []slack.Attachment{atch}}, nil
+	var buf bytes.Buffer
+	if err := s.tmpl.Execute(&buf, s.tmplView); err != nil {
+		return nil, err
+	}
+	var blocks slack.Blocks
+
+	err = blocks.UnmarshalJSON(buf.Bytes())
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal templating JSON: %w", err)
+	}
+
+	return &slack.WebhookMessage{Attachments: []slack.Attachment{{Color: clr, Blocks: blocks}}}, nil
 }

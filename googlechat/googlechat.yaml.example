@@ -1,4 +1,4 @@
-# Copyright 2020 Google LLC
+# Copyright 2022 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,15 +13,15 @@
 # limitations under the License.
 
 apiVersion: cloud-build-notifiers/v1
-kind: HTTPNotifier
+kind: GoogleChatNotifier
 metadata:
-  name: example-http-notifier
+  name: example-googlechat-notifier
 spec:
   notification:
     filter: build.status == Build.Status.SUCCESS
-    template:
-      type: golang
-      uri: gs://project-name/http.json
     delivery:
-      # The `http(s)://` protocol prefix is required.
-      url: https://some-endpoint
+      webhookUrl:
+        secretRef: webhook-url
+  secrets:
+  - name: webhook-url
+    value: projects/example-project/secrets/example-googlechat-notifier-webhook-url/versions/latest
