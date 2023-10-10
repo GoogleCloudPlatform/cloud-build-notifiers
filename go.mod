@@ -5,9 +5,9 @@ go 1.16
 replace github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers => ./lib/notifiers
 
 require (
-	cloud.google.com/go v0.110.0
+	cloud.google.com/go v0.110.2
 	cloud.google.com/go/bigquery v1.50.0
-	cloud.google.com/go/cloudbuild v1.9.0
+	cloud.google.com/go/cloudbuild v1.14.0
 	cloud.google.com/go/secretmanager v1.11.0
 	cloud.google.com/go/storage v1.29.0
 	github.com/andybalholm/brotli v1.0.5 // indirect
@@ -24,7 +24,7 @@ require (
 	github.com/slack-go/slack v0.12.2
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	golang.org/x/exp v0.0.0-20230420155640-133eef4313cb // indirect
-	google.golang.org/api v0.125.0
+	google.golang.org/api v0.126.0
 	google.golang.org/protobuf v1.30.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/client-go v0.27.1
