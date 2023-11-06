@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
@@ -27,6 +28,7 @@ func TestSetUp(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		cfg     *notifiers.Config
+		wantUrl string
 		wantErr bool
 	}{{
 		name: "valid config",
@@ -40,6 +42,7 @@ func TestSetUp(t *testing.T) {
 				},
 			},
 		},
+		wantUrl: url,
 	}, {
 		name: "missing filter",
 		cfg: &notifiers.Config{
@@ -91,10 +94,44 @@ func TestSetUp(t *testing.T) {
 			},
 		},
 		wantErr: true,
+	}, {
+		name: "url secret ref",
+		cfg: &notifiers.Config{
+			Spec: &notifiers.Spec{
+				Notification: &notifiers.Notification{
+					Filter: `build.status == Build.Status.SUCCESS`,
+					Delivery: map[string]interface{}{
+						"urlRef": map[interface{}]interface{}{"secretRef": "secretToken"},
+					},
+				},
+				Secrets: []*notifiers.Secret{{
+					LocalName:    "secretToken",
+					ResourceName: urlSecretResource,
+				}},
+			},
+		},
+		wantUrl: urlSecret,
+	}, {
+		name: "incorrect secret reasource",
+		cfg: &notifiers.Config{
+			Spec: &notifiers.Spec{
+				Notification: &notifiers.Notification{
+					Filter: `build.status == Build.Status.SUCCESS`,
+					Delivery: map[string]interface{}{
+						"urlRef": map[interface{}]interface{}{"secretRef": "secretToken"},
+					},
+				},
+				Secrets: []*notifiers.Secret{{
+					LocalName:    "secretToken",
+					ResourceName: "bad-resource",
+				}},
+			},
+		},
+		wantErr: true,
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			n := new(httpNotifier)
-			err := n.SetUp(context.Background(), tc.cfg, "", nil, nil)
+			err := n.SetUp(context.Background(), tc.cfg, "", new(fakeSecretGetter), nil)
 			if err != nil {
 				if tc.wantErr {
 					t.Logf("got expected error: %v", err)
@@ -107,9 +144,21 @@ func TestSetUp(t *testing.T) {
 				t.Error("unexpected success")
 			}
 
-			if n.url != tc.cfg.Spec.Notification.Delivery["url"].(string) {
-				t.Errorf("mismatch in post-setup URL: got %q; want %q", n.url, tc.cfg.Spec.Notification.Delivery["url"])
+			if !tc.wantErr && n.url != tc.wantUrl {
+				t.Errorf("mismatch in post-setup URL: got %q; want %q", n.url, tc.wantUrl)
 			}
 		})
 	}
+}
+
+const urlSecretResource = "projects/test-project/secrets/test-secret/versions/latest"
+const urlSecret = "http://example.com/?secret"
+
+type fakeSecretGetter struct{}
+
+func (f *fakeSecretGetter) GetSecret(_ context.Context, name string) (string, error) {
+	if name != urlSecretResource {
+		return "", fmt.Errorf("Unexpected secret %s", name)
+	}
+	return urlSecret, nil
 }
