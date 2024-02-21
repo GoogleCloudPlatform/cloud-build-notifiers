@@ -161,3 +161,13 @@ func TestConfigs(t *testing.T) {
 		})
 	}
 }
+
+func TestGetGithubRepo(t *testing.T) {
+	// test GetGithubRepo method
+	build := &cbpb.Build{
+		Substitutions: map[string]string{"REPO_NAME": "github.com/somename/somerepo"},
+	}
+	if got, want := GetGithubRepo("config/repo", build), "somename/somerepo"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

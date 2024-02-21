@@ -98,7 +98,7 @@ func (g *githubissuesNotifier) SendNotification(ctx context.Context, build *cbpb
 		return nil
 	}
 
-	webhookURL := fmt.Sprintf("%s/%s/issues", githubApiEndpoint, g.githubRepo)
+	webhookURL := fmt.Sprintf("%s/%s/issues", githubApiEndpoint, GetGithubRepo(g.githubRepo, build))
 
 	log.Infof("sending GitHub Issue webhook for Build %q (status: %q) to url %q", build.Id, build.Status, webhookURL)
 
@@ -147,4 +147,18 @@ func (g *githubissuesNotifier) SendNotification(ctx context.Context, build *cbpb
 
 	log.V(2).Infoln("send HTTP request successfully")
 	return nil
+}
+
+func GetGithubRepo(configGithubRepo string, build *cbpb.Build) string {
+	if build.Substitutions != nil {
+		if repo, ok := build.Substitutions["REPO_NAME"]; ok {
+			// split and only take repo name as last two parts
+			// e.g. "github.com/GoogleCloudPlatform/cloud-build-notifiers" -> "GoogleCloudPlatform/cloud-build-notifiers"
+			parts := strings.Split(repo, "/")
+			if len(parts) > 2 {
+				return strings.Join(parts[len(parts)-2:], "/")
+			}
+		}
+	}
+	return configGithubRepo
 }
