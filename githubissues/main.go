@@ -151,13 +151,10 @@ func (g *githubissuesNotifier) SendNotification(ctx context.Context, build *cbpb
 
 func GetGithubRepo(configGithubRepo string, build *cbpb.Build) string {
 	if build.Substitutions != nil {
-		if repo, ok := build.Substitutions["REPO_NAME"]; ok {
-			// split and only take repo name as last two parts
-			// e.g. "github.com/GoogleCloudPlatform/cloud-build-notifiers" -> "GoogleCloudPlatform/cloud-build-notifiers"
-			parts := strings.Split(repo, "/")
-			if len(parts) > 2 {
-				return strings.Join(parts[len(parts)-2:], "/")
-			}
+		if repo, ok := build.Substitutions["REPO_FULL_NAME"]; ok {
+			// return repo full name if it's available
+			// e.g. "GoogleCloudPlatform/cloud-build-notifiers"
+			return repo
 		}
 	}
 	return configGithubRepo
