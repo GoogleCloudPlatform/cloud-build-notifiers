@@ -150,12 +150,10 @@ func (g *githubissuesNotifier) SendNotification(ctx context.Context, build *cbpb
 }
 
 func GetGithubRepo(configGithubRepo string, build *cbpb.Build) string {
-	if build.Substitutions != nil {
-		if repo, ok := build.Substitutions["REPO_FULL_NAME"]; ok {
-			// return repo full name if it's available
-			// e.g. "GoogleCloudPlatform/cloud-build-notifiers"
-			return repo
-		}
+	if build.Substitutions != nil && build.Substitutions["REPO_FULL_NAME"] != "" {
+		// return repo full name if it's available
+		// e.g. "GoogleCloudPlatform/cloud-build-notifiers"
+		return build.Substitutions["REPO_FULL_NAME"]
 	}
 	return configGithubRepo
 }
