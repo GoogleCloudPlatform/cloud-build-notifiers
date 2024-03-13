@@ -25,7 +25,7 @@ require (
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	golang.org/x/exp v0.0.0-20230420155640-133eef4313cb // indirect
 	google.golang.org/api v0.126.0
-	google.golang.org/protobuf v1.30.0
+	google.golang.org/protobuf v1.33.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/client-go v0.27.1
 )
