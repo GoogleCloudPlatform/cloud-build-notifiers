@@ -125,7 +125,11 @@ func (h *httpNotifier) SendNotification(ctx context.Context, build *cbpb.Build) 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if !(resp.StatusCode == http.StatusProcessing ||
+		resp.StatusCode == http.StatusOK ||
+		resp.StatusCode == http.StatusCreated ||
+		resp.StatusCode == http.StatusAccepted ||
+		resp.StatusCode == http.StatusNoContent) {
 		log.Warningf("got a non-OK response status %q (%d) from %q", resp.Status, resp.StatusCode, h.url)
 	}
 
