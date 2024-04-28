@@ -189,7 +189,7 @@ upload_config() {
   # We allow this `mb` command to error since we rely on the `cp` command hard-
   # erroring if there's an actual problem (since `mb` fails if the bucket
   # already exists).
-  gsutil mb "${DESTINATION_BUCKET_URI}"
+  gsutil mb -l asia1 "${DESTINATION_BUCKET_URI}"
 
   gsutil cp "${SOURCE_CONFIG_PATH}" "${DESTINATION_CONFIG_PATH}" ||
     fail "failed to copy config to GCS"
@@ -202,9 +202,9 @@ upload_config() {
 }
 
 deploy_notifier() {
-  gcloud run deploy "${SERVICE_NAME}" \
+  gcloud run services update "${SERVICE_NAME}" \
     --image="${IMAGE_PATH}" \
-    --no-allow-unauthenticated \
+    --max-instances=1 \
     --update-env-vars="CONFIG_PATH=${DESTINATION_CONFIG_PATH},PROJECT_ID=${PROJECT_ID}" ||
     fail "failed to deploy notifier service -- check service logs for configuration error"
 }
@@ -239,7 +239,8 @@ create_pubsub_subscription() {
   gcloud pubsub subscriptions create "${SUBSCRIPTION_NAME}" \
     --topic=cloud-builds \
     --push-endpoint="${SERVICE_URL}" \
-    --push-auth-service-account="${INVOKER_SA}"
+    --push-auth-service-account="${INVOKER_SA}" \
+    --expiration-period="never"
 }
 
 check_pubsub_subscription() {
