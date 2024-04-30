@@ -1,0 +1,23 @@
+steps:
+  - id: gokart
+    name: golang:1.16
+    entrypoint: 'bash'
+    args:
+     - -c
+     - |
+       go install github.com/praetorian-inc/gokart@latest
+       gokart scan ./
+    waitFor: ['-']
+
+  - name: securego/gosec
+    args:  ['./...']
+    waitFor: ['-']
+
+  - id: gofmt
+    name: golang
+    entrypoint: 'sh'
+    args:
+     - -c 
+     - |
+       gofmt -s -d . && test -z $(gofmt -s -d .)
+    waitFor: ['-']
