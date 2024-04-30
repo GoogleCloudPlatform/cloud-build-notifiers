@@ -30,11 +30,11 @@ import (
 	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/google"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var tableResource = regexp.MustCompile(".*/.*/.*/(.*)/.*/(.*)")
