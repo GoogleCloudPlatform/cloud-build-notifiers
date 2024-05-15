@@ -1,7 +1,9 @@
 # Cloud Build Notifiers
 
 ## Brandfolder Fork
+
 ### Development Flow
+
 ...
 ![Cloud Build Diagram](https://cdn.bfldr.com/E1ZI75Y3/at/4sp4v8ftmhmg26pj7wb8jbcm/cloud-build-notifiers_Build_Run.png?auto=webp&format=png)
 
@@ -26,13 +28,10 @@ for your Cloud Build project(s).
 
 There are currently 3 supported notifier types:
 
--   [`bigquery`](./bigquery/README.md), which writes Build updates and related
-    data to a BigQuery table.
--   [`http`](./http/README.md), which sends (HTTP `POST`s) a JSON payload to
-    another HTTP endpoint.
--   [`slack`](./slack/README.md), which uses a Slack webhook to post a message
-    in a Slack channel.
--   [`smtp`](./smtp/README.md), which sends emails via an SMTP server.
+- [`bigquery`](./bigquery/README.md), which writes Build updates and related data to a BigQuery table.
+- [`http`](./http/README.md), which sends (HTTP `POST`s) a JSON payload to another HTTP endpoint.
+- [`slack`](./slack/README.md), which uses a Slack webhook to post a message in a Slack channel.
+- [`smtp`](./smtp/README.md), which sends emails via an SMTP server.
 
 **See the official documentation on Google Cloud for how to configure each notifier:**
 
@@ -40,7 +39,6 @@ There are currently 3 supported notifier types:
 - [Configuring HTTP notifications](https://cloud.google.com/cloud-build/docs/configuring-notifications/configure-http)
 - [Configuring Slack notifications](https://cloud.google.com/cloud-build/docs/configuring-notifications/configure-slack)
 - [Configuring SMTP notifications](https://cloud.google.com/cloud-build/docs/configuring-notifications/configure-smtp)
-
 
 ## Setup Script
 
@@ -76,10 +74,10 @@ $ sudo docker build . \
 # --rm to clean/remove the image once it exits.
 $ sudo docker run \
     --interactive \
-    --rm \ 
+    --rm \
     --name=${NOTIFIER_TYPE}-test \
     ${NOTIFIER_TYPE}-test:latest --setup_check --alsologtostderr -v=5 \
-    < path/to/my/config.yaml 
+    < path/to/my/config.yaml
 ```
 
 ## Brandfolder - How to test in stage
@@ -89,7 +87,8 @@ Find the latest short commit sha in the [bf-product container registry](https://
 Use that commit sha for the `cloud_build_notifier_sha` in the [bf-product stage terraform](https://github.com/brandfolder/terraform/blob/a3d6a9b27d58770714d15826fe645b714f931109/infra/squads/product/stage/bf-product/terragrunt.hcl#L11).
 
 After changing the terraform file, from `/infra/squads` run:
-```
+
+```sh
 SQUAD=product make run env=stage project=bf-product
 ```
 
@@ -107,10 +106,9 @@ See [here](./CONTRIBUTING.md) for contributing guidelines.
 
 There are several ways to get support for issues in this project:
 
--   [Cloud Build Slack channel](https://googlecloud-community.slack.com/archives/C4KCRJL4D)
--   [Cloud Build Issue Tracker](https://issuetracker.google.com/issues/new?component=190802&template=1162743)
--   [General Google Cloud support](https://cloud.google.com/cloud-build/docs/getting-support)
+- [Cloud Build Slack channel](https://googlecloud-community.slack.com/archives/C4KCRJL4D)
+- [Cloud Build Issue Tracker](https://issuetracker.google.com/issues/new?component=190802&template=1162743)
+- [General Google Cloud support](https://cloud.google.com/cloud-build/docs/getting-support)
 
 Note: Issues filed in this repo are not guaranteed to be addressed.
 We recommend filing issues via the [Issue Tracker](https://issuetracker.google.com/issues/new?component=190802&template=1162743).
-

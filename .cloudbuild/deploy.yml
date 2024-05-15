@@ -1,7 +1,6 @@
 substitutions:
   # these variable are expected to remain static across environments
-  _GCR_IMAGE_NAME: gcr.io/bf-container-registry/bf-product/cloud-build-notifiers
-  _ARTIFACT_REGISTRY_IMAGE_NAME: us-docker.pkg.dev/bf-artifact-registry/bf-docker-registry/bf-product/cloud-build-notifiers
+  _IMAGE_NAME: us-docker.pkg.dev/bf-artifact-registry/bf-docker-registry/bf-product/cloud-build-notifiers
 
 steps:
   - id: Docker Build
@@ -12,6 +11,5 @@ steps:
       - --build-arg=BUILD_PROJECT=${PROJECT_ID}
       - --build-arg=BUILD_ID=${BUILD_ID}
       - --build-arg=BUILD_SERVICE=cloudbuild
-      - --destination=${_GCR_IMAGE_NAME}:${SHORT_SHA}
-      - --destination=${_ARTIFACT_REGISTRY_IMAGE_NAME}:${SHORT_SHA}
+      - --destination=${_IMAGE_NAME}:${SHORT_SHA}
       - --cache=true
