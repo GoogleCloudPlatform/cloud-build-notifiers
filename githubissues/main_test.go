@@ -161,3 +161,33 @@ func TestConfigs(t *testing.T) {
 		})
 	}
 }
+
+func TestGetGithubRepo(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		build    *cbpb.Build
+		expected string
+	}{{
+		name: "REPO_FULL_NAME is set",
+		// test GetGithubRepo method
+		build: &cbpb.Build{
+			Substitutions: map[string]string{"REPO_FULL_NAME": "somename/somerepo"},
+		},
+		expected: "somename/somerepo",
+	}, {
+		name: "REPO_FULL_NAME is not set",
+		// test GetGithubRepo method
+		build: &cbpb.Build{
+			Substitutions: map[string]string{},
+		},
+		expected: "",
+	},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := GetGithubRepo(tc.build)
+			if actual != tc.expected {
+				t.Errorf("expected %q, got %q", tc.expected, actual)
+			}
+		})
+	}
+}
