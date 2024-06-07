@@ -66,8 +66,8 @@ func (s *smtpNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, cfgTemp
 	}
 	s.htmlTmpl = htmlTmpl
 
-	if _, subjectFound := cfg.Spec.Notification.Delivery["subject"]; subjectFound {
-		textTmpl, err := textTemplate.New("subject_template").Parse(cfg.Spec.Notification.Delivery["Subject"].(string))
+	if subject, subjectFound := cfg.Spec.Notification.Delivery["subject"]; subjectFound {
+		textTmpl, err := textTemplate.New("subject_template").Parse(subject.(string))
 		if err != nil {
 			return fmt.Errorf("failed to parse TEXT subject template: %w", err)
 		}
