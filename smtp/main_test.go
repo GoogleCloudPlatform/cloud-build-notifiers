@@ -47,16 +47,16 @@ const htmlBody = `<!doctype html>
 </div>
 <div class="card-content white">
 <table class="bordered">
-  <tbody>
+	<tbody>
 	<tr>
-	  <td>Status</td>
-	  <td>{{.Params.buildStatus}}</td>
+		<td>Status</td>
+		<td>{{.Params.buildStatus}}</td>
 	</tr>
 	<tr>
-	  <td>Log URL</td>
-	  <td><a href="{{.Build.LogUrl}}">Click Here</a></td>
+		<td>Log URL</td>
+		<td><a href="{{.Build.LogUrl}}">Click Here</a></td>
 	</tr>
-  </tbody>
+	</tbody>
 </table>
 </div>
 </div>
@@ -65,6 +65,8 @@ const htmlBody = `<!doctype html>
 </div>
 </div>
 </html>`
+
+const templateSubject = `Build {{.Build.Id}} Status: {{.Build.Status}}`
 
 type fakeSecretGetter struct{}
 
@@ -147,7 +149,7 @@ metadata:
   name: failed-build-email-notification
 spec:
   notification:
-    filter: event.buildTriggerStatus == “STATUS_FAILED”
+    filter: event.buildTriggerStatus == "STATUS_FAILED"
     delivery:
       server: smtp.example.com
       port: '587'
@@ -190,10 +192,6 @@ spec:
 }
 
 func TestDefaultEmailTemplate(t *testing.T) {
-	tmpl, err := template.New("email_template").Parse(htmlBody)
-	if err != nil {
-		t.Fatalf("template.Parse failed: %v", err)
-	}
 	build := &cbpb.Build{
 		Id:             "some-build-id",
 		ProjectId:      "my-project-id",
@@ -209,8 +207,30 @@ func TestDefaultEmailTemplate(t *testing.T) {
 		Params: map[string]string{"buildStatus": "SUCCESS"},
 	}
 
+	// Subject email template
+	subjectTmpl, err := template.New("subject_template").Parse(templateSubject)
+	if err != nil {
+			t.Fatalf("failed to parse subject template: %v", err)
+	}
+
+	subject := new(bytes.Buffer)
+	if err := subjectTmpl.Execute(subject, view); err != nil {
+			t.Fatalf("failed to execute subject template: %v", err)
+	}
+
+	expectedSubject := "Build some-build-id Status: SUCCESS"
+	if subject.String() != expectedSubject {
+			t.Errorf("expected subject %q, but got %q", expectedSubject, subject.String())
+	}
+
+	// Body email template
+	bodyTmpl, err := template.New("email_template").Parse(htmlBody)
+	if err != nil {
+		t.Fatalf("template.Parse failed: %v", err)
+	}
+
 	body := new(bytes.Buffer)
-	if err := tmpl.Execute(body, view); err != nil {
+	if err := bodyTmpl.Execute(body, view); err != nil {
 		t.Fatalf("failed to execute template: %v", err)
 	}
 
