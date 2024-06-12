@@ -18,7 +18,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"html/template"
+	htmlTemplate "html/template"
+	textTemplate "text/template"
 	"mime/quotedprintable"
 	"net/smtp"
 	"strings"
@@ -41,15 +42,16 @@ func main() {
 
 type smtpNotifier struct {
 	filter   notifiers.EventFilter
-	tmpl     *template.Template
+	htmlTmpl *htmlTemplate.Template
+	textTmpl *textTemplate.Template
 	mcfg     mailConfig
 	br       notifiers.BindingResolver
 	tmplView *notifiers.TemplateView
 }
 
 type mailConfig struct {
-	server, port, sender, from, password string
-	recipients                           []string
+	server, port, sender, from, password, subject string
+	recipients                                    []string
 }
 
 func (s *smtpNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, cfgTemplate string, sg notifiers.SecretGetter, br notifiers.BindingResolver) error {
@@ -58,11 +60,19 @@ func (s *smtpNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, cfgTemp
 		return fmt.Errorf("failed to create CELPredicate: %w", err)
 	}
 	s.filter = prd
-	tmpl, err := template.New("email_template").Parse(cfgTemplate)
+	htmlTmpl, err := htmlTemplate.New("email_template").Parse(cfgTemplate)
 	if err != nil {
 		return fmt.Errorf("failed to parse HTML email template: %w", err)
 	}
-	s.tmpl = tmpl
+	s.htmlTmpl = htmlTmpl
+
+	if subject, subjectFound := cfg.Spec.Notification.Delivery["subject"]; subjectFound {
+		textTmpl, err := textTemplate.New("subject_template").Parse(subject.(string))
+		if err != nil {
+			return fmt.Errorf("failed to parse TEXT subject template: %w", err)
+		}
+		s.textTmpl = textTmpl
+	}
 
 	mcfg, err := getMailConfig(ctx, sg, cfg.Spec)
 	if err != nil {
@@ -175,11 +185,20 @@ func (s *smtpNotifier) buildEmail() (string, error) {
 	build.LogUrl = logURL
 
 	body := new(bytes.Buffer)
-	if err := s.tmpl.Execute(body, s.tmplView); err != nil {
+	if err := s.htmlTmpl.Execute(body, s.tmplView); err != nil {
 		return "", err
 	}
 
 	subject := fmt.Sprintf("Cloud Build [%s]: %s", build.ProjectId, build.Id)
+	if s.textTmpl != nil {
+		subjectTmpl := new(bytes.Buffer)
+		if err := s.textTmpl.Execute(subjectTmpl, s.tmplView); err != nil {
+			return "", err
+		}
+
+		// Escape any string formatter
+		subject = strings.Join(strings.Fields(subjectTmpl.String()), " ")
+	}
 
 	header := make(map[string]string)
 	if s.mcfg.from != s.mcfg.sender {
