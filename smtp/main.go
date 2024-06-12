@@ -196,7 +196,8 @@ func (s *smtpNotifier) buildEmail() (string, error) {
 			return "", err
 		}
 
-		subject = subjectTmpl.String()
+		// Escape any string formatter
+		subject = strings.Join(strings.Fields(subjectTmpl.String()), " ")
 	}
 
 	header := make(map[string]string)
