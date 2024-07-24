@@ -192,6 +192,11 @@ spec:
 }
 
 func TestDefaultEmailTemplate(t *testing.T) {
+	tmpl, err := template.New("email_template").Parse(htmlBody)
+	if err != nil {
+		t.Fatalf("template.Parse failed: %v", err)
+	}
+
 	build := &cbpb.Build{
 		Id:             "some-build-id",
 		ProjectId:      "my-project-id",
@@ -207,30 +212,8 @@ func TestDefaultEmailTemplate(t *testing.T) {
 		Params: map[string]string{"buildStatus": "SUCCESS"},
 	}
 
-	// Subject email template
-	subjectTmpl, err := template.New("subject_template").Parse(templateSubject)
-	if err != nil {
-			t.Fatalf("failed to parse subject template: %v", err)
-	}
-
-	subject := new(bytes.Buffer)
-	if err := subjectTmpl.Execute(subject, view); err != nil {
-			t.Fatalf("failed to execute subject template: %v", err)
-	}
-
-	expectedSubject := "Build some-build-id Status: SUCCESS"
-	if subject.String() != expectedSubject {
-			t.Errorf("expected subject %q, but got %q", expectedSubject, subject.String())
-	}
-
-	// Body email template
-	bodyTmpl, err := template.New("email_template").Parse(htmlBody)
-	if err != nil {
-		t.Fatalf("template.Parse failed: %v", err)
-	}
-
 	body := new(bytes.Buffer)
-	if err := bodyTmpl.Execute(body, view); err != nil {
+	if err := tmpl.Execute(body, view); err != nil {
 		t.Fatalf("failed to execute template: %v", err)
 	}
 
@@ -244,5 +227,37 @@ func TestDefaultEmailTemplate(t *testing.T) {
 
 	if !strings.Contains(body.String(), `<a href="https://some.example.com/log/url">`) {
 		t.Error("missing Log URL")
+	}
+}
+
+func TestSubjectEmailTemplate(t *testing.T) {
+	tmpl, err := template.New("subject_template").Parse(templateSubject)
+	if err != nil {
+			t.Fatalf("failed to parse subject template: %v", err)
+	}
+
+	build := &cbpb.Build{
+		Id:             "some-build-id",
+		ProjectId:      "my-project-id",
+		BuildTriggerId: "some-trigger-id",
+		Status:         cbpb.Build_SUCCESS,
+		LogUrl:         "https://some.example.com/log/url",
+	}
+
+	view := &notifiers.TemplateView{
+		Build: &notifiers.BuildView{
+			Build: build,
+		},
+		Params: map[string]string{"buildStatus": "SUCCESS"},
+	}
+
+	subject := new(bytes.Buffer)
+	if err := tmpl.Execute(subject, view); err != nil {
+			t.Fatalf("failed to execute subject template: %v", err)
+	}
+
+	expectedSubject := "Build some-build-id Status: SUCCESS"
+	if subject.String() != expectedSubject {
+			t.Errorf("expected subject %q, but got %q", expectedSubject, subject.String())
 	}
 }
