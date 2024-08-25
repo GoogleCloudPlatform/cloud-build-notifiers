@@ -13,11 +13,11 @@
 # limitations under the License.
 
 steps:
-- name: gcr.io/cloud-builders/docker
-  args:
-  - build
-  - --file=./slack/Dockerfile
-  - '.'
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file=./slack/Dockerfile
+      - '.'
 
 tags:
-- cloud-build-notifiers-slack
+  - cloud-build-notifiers-slack

@@ -13,35 +13,69 @@
 # limitations under the License.
 
 steps:
-# Build the binary and put it into the builder image.
-- name: gcr.io/cloud-builders/docker
-  args:
-  - build
-  - --tag=${_REGISTRY}/slack:${TAG_NAME}
-  - --tag=${_REGISTRY}/slack:${_MAJOR_LATEST}
-  - --tag=${_REGISTRY}/slack:latest
-  - --file=./slack/Dockerfile
-  - '.'
-# Run the smoketest to verify that everything built correctly.
-- name: ${_REGISTRY}/slack:${TAG_NAME}
-  args:
-  - --smoketest
-  - --alsologtostderr
+  # Push file json + yaml on bucket storage for building
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: gcloud
+    args:
+      - storage
+      - cp
+      - ${_BASE_PATH}/slack.json
+      - gs://${_BUCKET_NAME}/
+
+  # Push file json + yaml on bucket storage for building
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: gcloud
+    args:
+      - storage
+      - cp
+      - ${_BASE_PATH}/slack.yaml
+      - gs://${_BUCKET_NAME}/
+
+  # Build the binary and put it into the builder image.
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag=${_REGISTRY}/slack:${_TAG_NAME}
+      - --tag=${_REGISTRY}/slack:${_MAJOR_LATEST}
+      - --tag=${_REGISTRY}/slack:latest
+      - --file=./slack/Dockerfile
+      - '.'
+  # Run the smoketest to verify that everything built correctly.
+  - name: ${_REGISTRY}/slack:${_TAG_NAME}
+    args:
+      - --smoketest
+      - --alsologtostderr
+  # Deploy container image to Cloud Run
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE_NAME}
+      - --image=${_REGISTRY}/slack:latest
+      - --no-allow-unauthenticated
+      - --update-env-vars=CONFIG_PATH=gs://${_DESTINATION_CONFIG_PATH},PROJECT_ID=${_PROJECT_ID}
+      - --region=asia-east1
 
 # Push the image with tags.
 images:
-- ${_REGISTRY}/slack:${TAG_NAME}
-- ${_REGISTRY}/slack:${_MAJOR_LATEST}
-- ${_REGISTRY}/slack:latest
+  - ${_REGISTRY}/slack:${_TAG_NAME}
+  - ${_REGISTRY}/slack:${_MAJOR_LATEST}
+  - ${_REGISTRY}/slack:latest
 
 options:
   dynamic_substitutions: true
 
 substitutions:
-  _REGISTRY: us-east1-docker.pkg.dev/gcb-release/cloud-build-notifiers
+  _REGISTRY: asia-east2-docker.pkg.dev/ai-smart-street-devops/cloud-build-notifiers
   # Looks like: $NOTIF-$MAJOR-latest. Not meant for overriding.
-  _MAJOR_LATEST: "${TAG_NAME%%.*}-latest"
-
+  _MAJOR_LATEST: '${_TAG_NAME%%.*}-latest'
+  _SERVICE_NAME: slack-notifier-service
+  _TAG_NAME: v1.0.0
+  _PROJECT_ID: ai-smart-street-devops
+  _DESTINATION_CONFIG_PATH: '${_BUCKET_NAME}/slack.yaml'
+  _BUCKET_NAME: 'bucket-store-slack-notifier'
+  _BASE_PATH: './slack'
 tags:
-- cloud-build-notifiers-slack
-- slack-${TAG_NAME}
+  - cloud-build-notifiers-slack
+  - slack-${_TAG_NAME}

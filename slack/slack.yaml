@@ -18,16 +18,16 @@ metadata:
   name: example-slack-notifier
 spec:
   notification:
-    filter: build.status == Build.Status.SUCCESS
-    params: 
+    filter: build.status in [Build.Status.SUCCESS, Build.Status.FAILURE, Build.Status.TIMEOUT, Build.Status.QUEUED]
+    params:
       buildStatus: $(build.status)
     delivery:
       webhookUrl:
         secretRef: webhook-url
     template:
       type: golang
-      uri: gs://example-gcs-bucket/slack.json
-      
+      uri: gs://bucket-store-slack-notifier/slack.json
+
   secrets:
-  - name: webhook-url
-    value: projects/example-project/secrets/example-slack-notifier-webhook-url/versions/latest
+    - name: webhook-url
+      value: projects/957128024543/secrets/slackIncomingWebhookURL/versions/latest
