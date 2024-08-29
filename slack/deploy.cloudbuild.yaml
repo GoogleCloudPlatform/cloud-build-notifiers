@@ -13,6 +13,24 @@
 # limitations under the License.
 
 steps:
+  # Push file json + yaml on bucket storage for building
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: gcloud
+    args:
+      - storage
+      - cp
+      - ${_BASE_PATH}/slack.json
+      - gs://${_BUCKET_NAME}/
+
+  # Push file json + yaml on bucket storage for building
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: gcloud
+    args:
+      - storage
+      - cp
+      - ${_BASE_PATH}/slack.yaml
+      - gs://${_BUCKET_NAME}/
+
   # Build the binary and put it into the builder image.
   - name: gcr.io/cloud-builders/docker
     args:
@@ -36,7 +54,7 @@ steps:
       - ${_SERVICE_NAME}
       - --image=${_REGISTRY}/slack:latest
       - --no-allow-unauthenticated
-      - --update-env-vars=CONFIG_PATH=gs://${_DESTINATION_CONFIG_PATH},PROJECT_ID=${_PROJECT_ID}
+      - --update-env-vars=CONFIG_PATH=gs://${_DESTINATION_CONFIG_PATH},PROJECT_ID=$PROJECT_ID
       - --region=asia-east1
 
 # Push the image with tags.
@@ -47,7 +65,7 @@ images:
 
 options:
   dynamic_substitutions: true
-  automap_substitutions: true
+  automapSubstitutions: true
   logging: CLOUD_LOGGING_ONLY
 
 substitutions:
@@ -56,7 +74,6 @@ substitutions:
   _MAJOR_LATEST: '${_TAG_NAME%%.*}-latest'
   _SERVICE_NAME: slack-notifier-service
   _TAG_NAME: v1.0.0
-  _PROJECT_ID: ai-smart-street-devops
   _DESTINATION_CONFIG_PATH: '${_BUCKET_NAME}/slack.yaml'
   _BUCKET_NAME: 'bucket-store-slack-notifier'
   _BASE_PATH: './slack'

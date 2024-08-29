@@ -18,8 +18,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"text/template"
 	"strings"
+	"text/template"
 
 	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
@@ -85,6 +85,9 @@ func (s *slackNotifier) SendNotification(ctx context.Context, build *cbpb.Build)
 
 	log.Infof("sending Slack webhook for Build %q (status: %q)", build.Id, build.Status)
 
+	log.Infof("Log build: %+v", build)
+	log.Infof("Log context: %+v", ctx)
+
 	bindings, err := s.br.Resolve(ctx, nil, build)
 	if err != nil {
 		return fmt.Errorf("failed to resolve bindings: %w", err)
@@ -113,13 +116,18 @@ func (s *slackNotifier) writeMessage() (*slack.WebhookMessage, error) {
 	}
 
 	var clr string
+	var colourCode string
+
 	switch build.Status {
 	case cbpb.Build_SUCCESS:
-		clr = "#22bb33"
+		clr = "🟢"
+		colourCode = "#0DBE0C"
 	case cbpb.Build_FAILURE, cbpb.Build_INTERNAL_ERROR, cbpb.Build_TIMEOUT:
-		clr = "#bb2124"
+		clr = "🔴"
+		colourCode = "#AE1413"
 	default:
-		clr = "#f0ad4e"
+		clr = "🟠"
+		colourCode = "#DE7A00"
 	}
 
 	var buf bytes.Buffer
@@ -133,5 +141,32 @@ func (s *slackNotifier) writeMessage() (*slack.WebhookMessage, error) {
 		return nil, fmt.Errorf("failed to unmarshal templating JSON: %w", err)
 	}
 
-	return &slack.WebhookMessage{Attachments: []slack.Attachment{{Color: clr, Blocks: blocks}}}, nil
+	log.Infof("Block in writeMessage() %+v", blocks)
+	log.Infof("clr %q", clr)
+
+	commitMessage, exists := build.Substitutions["_COMMIT_MESSAGE"]
+	if !exists {
+		commitMessage = "" // Provide a default message if the key doesn't exist
+	}
+
+	repoName, exists := build.Substitutions["REPO_NAME"]
+	if !exists {
+		repoName = "" // Provide a default message if the key doesn't exist
+	}
+
+	branchName, exists := build.Substitutions["BRANCH_NAME"]
+	if !exists {
+		branchName = "" // Provide a default message if the key doesn't exist
+	}
+
+	// attachments in Slack payload: https://api.slack.com/methods/chat.postMessage#arg_attachments
+	return &slack.WebhookMessage{
+		Username: "GiaPhuThinh",
+		Text:     fmt.Sprintf(`%s %s [%s] [%s] "%s"`, clr, build.Status.String(), repoName, branchName, commitMessage),
+		Attachments: []slack.Attachment{
+			{
+				Color:  colourCode,
+				Blocks: blocks,
+			}},
+	}, nil
 }

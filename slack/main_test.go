@@ -1,9 +1,9 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"text/template"
-	"strings"
 
 	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
@@ -66,8 +66,9 @@ func TestWriteMessage(t *testing.T) {
 	}
 
 	want := &slack.WebhookMessage{
+		Username: "GiaPhuThinh",
+		Text:     "🟢" + " This is Slack notification",
 		Attachments: []slack.Attachment{{
-			Color: "#22bb33",
 			Blocks: slack.Blocks{
 				BlockSet: []slack.Block{
 					&slack.SectionBlock{

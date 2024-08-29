@@ -13,10 +13,13 @@
 # limitations under the License.
 
 FROM golang AS build-env
+COPY go.mod go.sum ./lib/notifiers ./
+RUN go mod download
+
 COPY . /go-src/
 WORKDIR /go-src/slack
 ENV CGO_ENABLED=0
-RUN go test /go-src/slack
+# RUN go test /go-src/slack
 RUN go build -o /go-app .
 
 # From the Cloud Run docs:

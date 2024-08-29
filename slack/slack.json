@@ -1,30 +1,9 @@
 [
-    {
-      "type": "section",
-      "text": {
-        "type": "mrkdwn",
-        "text": "Cloud Build {{.Build.ProjectId}} {{.Build.Id}} {{.Params.buildStatus}}"
-      }
-    },
-    {
-      "type": "divider"
-    },
-    {
-      "type": "section",
-      "text": {
-        "type": "mrkdwn",
-        "text": "View Build Logs"
-      },
-      "accessory": {
-        "type": "button",
-        "text": {
-          "type": "plain_text",
-          "text": "Logs"
-        },
-        "value": "click_me_123",
-        "url": "{{.Build.LogUrl}}",
-        "action_id": "button-action"
-      }
-    }
-  ]
-  
+	{
+		"type": "section",
+		"text": {
+			"type": "mrkdwn",
+			"text": "By *{{.Build.Substitutions._COMMIT_USER}}* on `{{.Build.Substitutions.BRANCH_NAME}}`\n<{{.Build.Substitutions._COMMIT_URL}}|{{.Build.Substitutions.SHORT_SHA}}> | {{if .Build.Substitutions.REPO_NAME}}{{.Build.Substitutions.REPO_NAME}} | via Github{{end}} | {{if .Build.FinishTime}}{{.Build.FinishTime.Seconds}}{{end}} | <{{.Build.LogUrl}}|LOG BUILD>\n{{.Build.Substitutions._HEAD_BRANCH}} -> {{.Build.Substitutions._BASE_BRANCH}} | {{.Build.Substitutions._HEAD_REPO_URL}} | {{.Build.Substitutions._PR_NUMBER}}"
+		}
+	}
+]
