@@ -19,5 +19,8 @@ steps:
       - --file=./slack/Dockerfile
       - '.'
 
+options:
+  logging: CLOUD_LOGGING_ONLY
+
 tags:
   - cloud-build-notifiers-slack
