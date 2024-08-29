@@ -13,24 +13,6 @@
 # limitations under the License.
 
 steps:
-  # Push file json + yaml on bucket storage for building
-  - name: gcr.io/cloud-builders/gcloud
-    entrypoint: gcloud
-    args:
-      - storage
-      - cp
-      - ${_BASE_PATH}/slack.json
-      - gs://${_BUCKET_NAME}/
-
-  # Push file json + yaml on bucket storage for building
-  - name: gcr.io/cloud-builders/gcloud
-    entrypoint: gcloud
-    args:
-      - storage
-      - cp
-      - ${_BASE_PATH}/slack.yaml
-      - gs://${_BUCKET_NAME}/
-
   # Build the binary and put it into the builder image.
   - name: gcr.io/cloud-builders/docker
     args:
