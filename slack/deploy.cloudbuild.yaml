@@ -65,6 +65,8 @@ images:
 
 options:
   dynamic_substitutions: true
+  automap_substitutions: true
+  logging: CLOUD_LOGGING_ONLY
 
 substitutions:
   _REGISTRY: asia-east2-docker.pkg.dev/ai-smart-street-devops/cloud-build-notifiers
