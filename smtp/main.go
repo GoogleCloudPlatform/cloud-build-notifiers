@@ -48,8 +48,8 @@ type smtpNotifier struct {
 }
 
 type mailConfig struct {
-	server, port, sender, from, password string
-	recipients                           []string
+	server, port, username, sender, from, password string
+	recipients                                     []string
 }
 
 func (s *smtpNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, cfgTemplate string, sg notifiers.SecretGetter, br notifiers.BindingResolver) error {
@@ -84,6 +84,12 @@ func getMailConfig(ctx context.Context, sg notifiers.SecretGetter, spec *notifie
 	if !ok {
 		return mailConfig{}, fmt.Errorf("expected delivery config %v to have string field `port`", delivery)
 	}
+
+	var username string
+	if usr, ok := delivery["username"].(string); ok {
+		username = usr
+	}
+
 	sender, ok := delivery["sender"].(string)
 	if !ok {
 		return mailConfig{}, fmt.Errorf("expected delivery config %v to have string field `sender`", delivery)
@@ -126,6 +132,7 @@ func getMailConfig(ctx context.Context, sg notifiers.SecretGetter, spec *notifie
 	return mailConfig{
 		server:     server,
 		port:       port,
+		username:   username,
 		sender:     sender,
 		from:       from,
 		password:   password,
@@ -157,7 +164,10 @@ func (s *smtpNotifier) sendSMTPNotification() error {
 	}
 
 	addr := fmt.Sprintf("%s:%s", s.mcfg.server, s.mcfg.port)
-	auth := smtp.PlainAuth("", s.mcfg.sender, s.mcfg.password, s.mcfg.server)
+	var auth smtp.Auth
+	if s.mcfg.username != "" {
+		auth = smtp.PlainAuth("", s.mcfg.username, s.mcfg.password, s.mcfg.server)
+	}
 
 	if err = smtp.SendMail(addr, auth, s.mcfg.from, s.mcfg.recipients, []byte(email)); err != nil {
 		return fmt.Errorf("failed to send email: %w", err)

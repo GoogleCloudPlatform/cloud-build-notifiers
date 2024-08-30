@@ -99,6 +99,7 @@ func TestGetMailConfig(t *testing.T) {
 			wantConfig: mailConfig{
 				server:     "smtp.example.com",
 				port:       "4040",
+				username:   "ACCESS_KEY",
 				password:   password,
 				sender:     "me@example.com",
 				from:       "another_me@example.com",
@@ -151,6 +152,7 @@ spec:
     delivery:
       server: smtp.example.com
       port: '587'
+	  username: ACCESS_KEY #OPTIONAL
       sender: my-notifier@example.com
       from: my-notifier-from@example.com
       password:
@@ -166,6 +168,7 @@ spec:
 	wantMailConfig := mailConfig{
 		server:     "smtp.example.com",
 		port:       "587",
+		username:   "ACCESS_KEY",
 		password:   password,
 		sender:     "my-notifier@example.com",
 		from:       "my-notifier-from@example.com",
