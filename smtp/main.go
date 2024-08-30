@@ -85,10 +85,7 @@ func getMailConfig(ctx context.Context, sg notifiers.SecretGetter, spec *notifie
 		return mailConfig{}, fmt.Errorf("expected delivery config %v to have string field `port`", delivery)
 	}
 
-	var username string
-	if usr, ok := delivery["username"].(string); ok {
-		username = usr
-	}
+	username, _ := delivery["username"].(string)
 
 	sender, ok := delivery["sender"].(string)
 	if !ok {
@@ -167,6 +164,8 @@ func (s *smtpNotifier) sendSMTPNotification() error {
 	var auth smtp.Auth
 	if s.mcfg.username != "" {
 		auth = smtp.PlainAuth("", s.mcfg.username, s.mcfg.password, s.mcfg.server)
+	} else {
+		auth = smtp.PlainAuth("", s.mcfg.sender, s.mcfg.password, s.mcfg.server)
 	}
 
 	if err = smtp.SendMail(addr, auth, s.mcfg.from, s.mcfg.recipients, []byte(email)); err != nil {
