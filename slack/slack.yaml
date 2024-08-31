@@ -26,8 +26,8 @@ spec:
         secretRef: webhook-url
     template:
       type: golang
-      uri: gs://personaai-386104-notifiers-config/slack.json
+      uri: gs://bucket-store-slack-notifier/slack.json
 
   secrets:
     - name: webhook-url
-      value: projects/personaai-386104/secrets/SLACK_GCLOUD_EVENT_WEBHOOK/versions/latest
+      value: projects/ai-smart-street-devops/secrets/SLACK_GCLOUD_EVENT_WEBHOOK/versions/latest

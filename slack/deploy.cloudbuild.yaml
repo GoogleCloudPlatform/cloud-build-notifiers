@@ -76,11 +76,11 @@ substitutions:
   # Looks like: $NOTIF-$MAJOR-latest. Not meant for overriding.
   _MAJOR_LATEST: '${_TAG_NAME%%.*}-latest'
   _TAG_NAME: v1.0.1
-  _BUCKET_NAME: 'personaai-386104-notifiers-config'
+  _BUCKET_NAME: 'bucket-store-slack-notifier'
   _DESTINATION_CONFIG_PATH: '${_BUCKET_NAME}/slack.yaml'
   _BASE_PATH: './slack'
-  _SERVICE_NAME: slack-notifier
-  _SERVICE_REGION: 'asia-southeast1'
+  _SERVICE_NAME: slack-notifier-service
+  _SERVICE_REGION: 'asia-east1'
 
 tags:
   - cloud-build-notifiers-slack
