@@ -3,24 +3,7 @@
 		"type": "section",
 		"text": {
 			"type": "mrkdwn",
-			"text": "{{if .Build.Substitutions.REPO_NAME}}*GitHub*: By *{{.Build.Substitutions._COMMIT_USER}}* on `{{.Build.Substitutions.REPO_NAME}}` `{{.Build.Substitutions.BRANCH_NAME}}` – <{{.Build.Substitutions._COMMIT_URL}}|{{.Build.Substitutions.SHORT_SHA}}>{{else}} {{end}}"
-		}
-	},
-	{
-		"type": "section",
-		"text": {
-			"type": "mrkdwn",
-			"text": "*Build*: `{{slice .Build.Id 0 8}}`{{if .Build.Substitutions.TRIGGER_NAME}} – `{{.Build.Substitutions.TRIGGER_NAME}}` – {{.Build.BuildTriggerId}}{{end}} – _<!date^{{.Build.CreateTime.Seconds}}^{date_short} {time}|Time Create Build>_"
-		},
-		"accessory": {
-			"type": "button",
-			"text": {
-				"type": "plain_text",
-				"text": "View Logs"
-			},
-			"value": "click_me_123",
-			"url": "{{.Build.LogUrl}}",
-			"action_id": "button-action"
+			"text": "{{if .Build.Substitutions.REPO_NAME}}\n*GitHub*: `<{{.Build.Substitutions._COMMIT_URL}}|{{.Build.Substitutions.SHORT_SHA}}>` by *{{.Build.Substitutions._COMMIT_USER}}*{{end}}\n*Build*: `<{{.Build.LogUrl}}|{{slice .Build.Id 0 8}}>`{{if .Build.Substitutions.TRIGGER_NAME}} – `{{.Build.Substitutions.TRIGGER_NAME}}`{{end}} – _<!date^{{.Build.CreateTime.Seconds}}^{date_short} {time}|Time Create Build>_"
 		}
 	}
 ]

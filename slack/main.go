@@ -137,7 +137,7 @@ func (s *slackNotifier) writeMessage() (*slack.WebhookMessage, error) {
 		clr = "🟢"
 		colourCode = "#0DBE0C"
 		buildDuration = formatDuration(int(build.FinishTime.Seconds) - int(build.StartTime.Seconds))
-	case cbpb.Build_FAILURE, cbpb.Build_INTERNAL_ERROR, cbpb.Build_TIMEOUT:
+	case cbpb.Build_FAILURE, cbpb.Build_INTERNAL_ERROR, cbpb.Build_TIMEOUT, cbpb.Build_EXPIRED, cbpb.Build_CANCELLED:
 		clr = "🔴"
 		colourCode = "#AE1413"
 		buildDuration = formatDuration(int(time.Now().Unix()) - int(build.StartTime.Seconds))
@@ -176,17 +176,18 @@ func (s *slackNotifier) writeMessage() (*slack.WebhookMessage, error) {
 
 	wrapWith(clr, "", "")
 	wrapWith(build.Status.String(), "*", "*")
-	if build.Substitutions["REPO_NAME"] != "" {
-		wrapWith(build.Substitutions["REPO_NAME"], "– `", "`")
+	if build.Substitutions["REPO_NAME"] != "" && build.Substitutions["BRANCH_NAME"] != "" {
+		wrapWith(build.Substitutions["REPO_NAME"]+"/"+build.Substitutions["BRANCH_NAME"], "– `", "`")
 	} else if build.Substitutions["TRIGGER_NAME"] != "" {
 		wrapWith(build.Substitutions["TRIGGER_NAME"], "– `", "`")
 	} else {
 		wrapWith("Trigger manually", "– ", "")
+		wrapWith(build.Substitutions["REF_NAME"], "`", "`")
 	}
-	wrapWith(buildDuration, "– _", "_")
-	wrapWith(build.Substitutions["REF_NAME"], "`", "`")
+
 	wrapWith(build.Substitutions["_COMMIT_MESSAGE"], "– _\"", "\"_")
-	wrapWith(build.GetFailureInfo().String(), "– _\"", "\"_")
+	wrapWith(buildDuration, "– _", "_")
+	wrapWith(build.GetFailureInfo().String(), "\n> *Error*: _\"", "\"_")
 
 	// Create message text without unnecessary characters
 	messageText := strings.Join(messageParts, " ")
