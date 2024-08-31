@@ -1,3 +1,11 @@
+# Note for Github subsitution
+
+First need subsitution to each build trigger:
+
+```
+gcloud builds triggers update github build-chainlit --update-substitutions=_COMMIT_MESSAGE="\$(commit.commit.message)",_COMMIT_URL="\$(commit.url)",_COMMIT_USER="\$(commit.author.login)",_PUSH_NAME="\$(push.repository.name)"
+```
+
 # Cloud Build Slack Notifier
 
 This notifier uses [Slack Webhooks](https://api.slack.com/messaging/webhooks) to
@@ -15,18 +23,22 @@ see [Configuring Slack notifications](https://cloud.google.com/cloud-build/docs/
 This notifier expects the following fields in the `delivery` map to be set:
 
 - `webhook_url`: The `secretRef: <Slack-webhook-URL>` map that references the
-Slack webhook URL resource path in the `secrets` section.
+  Slack webhook URL resource path in the `secrets` section.
 
 ## For release 1.15 and above:
+
 Please do not upgrade to 1.15 as it contains bindings/templating functionality which may break existing slack setups below 1.15. Official documentation will be released detailing usage for bindings/templating, but for now the feature is in alpha so existing users are recommended to use releases older than 1.15.
 
 You can specify the slack version like so:
+
 ```
 gcloud run deploy service-name \
    --image=us-east1-docker.pkg.dev/gcb-release/cloud-build-notifiers/slack:slack-1.14.0 \
    --no-allow-unauthenticated \
    --update-env-vars=CONFIG_PATH=config-path,PROJECT_ID=project-id
 ```
+
 ## Slack BlockKit Template Functions
+
 - The `replace` function allows replacement of substrings in any {{template variables}} in the .json Slack template. (For example, the variable `.Build.FailureInfo.Detail` contains double quotes, which breaks the BlockKitTemplate parsing.)
-   - Usage: `{{replace .Build.FailureInfo.Detail "\"" "'"}}`
+  - Usage: `{{replace .Build.FailureInfo.Detail "\"" "'"}}`

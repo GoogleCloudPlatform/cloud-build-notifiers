@@ -38,13 +38,21 @@ steps:
       - --tag=${_REGISTRY}/slack:${_TAG_NAME}
       - --tag=${_REGISTRY}/slack:${_MAJOR_LATEST}
       - --tag=${_REGISTRY}/slack:latest
-      - --file=./slack/Dockerfile
+      - --file=${_BASE_PATH}/Dockerfile
       - '.'
+
+      # Push the built image to the registry.
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGISTRY}/slack:${_TAG_NAME}
+
   # Run the smoketest to verify that everything built correctly.
   - name: ${_REGISTRY}/slack:${_TAG_NAME}
     args:
       - --smoketest
       - --alsologtostderr
+
   # Deploy container image to Cloud Run
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
@@ -52,31 +60,28 @@ steps:
       - run
       - deploy
       - ${_SERVICE_NAME}
-      - --image=${_REGISTRY}/slack:latest
+      - --image=${_REGISTRY}/slack:${_TAG_NAME}
       - --no-allow-unauthenticated
       - --update-env-vars=CONFIG_PATH=gs://${_DESTINATION_CONFIG_PATH},PROJECT_ID=$PROJECT_ID
-      - --region=asia-east1
-
-# Push the image with tags.
-images:
-  - ${_REGISTRY}/slack:${_TAG_NAME}
-  - ${_REGISTRY}/slack:${_MAJOR_LATEST}
-  - ${_REGISTRY}/slack:latest
+      - --region=${_SERVICE_REGION}
 
 options:
   dynamic_substitutions: true
   automapSubstitutions: true
   logging: CLOUD_LOGGING_ONLY
+  substitutionOption: 'ALLOW_LOOSE'
 
 substitutions:
-  _REGISTRY: asia-east2-docker.pkg.dev/ai-smart-street-devops/cloud-build-notifiers
+  _REGISTRY: asia-southeast1-docker.pkg.dev/${PROJECT_ID}/utilities
   # Looks like: $NOTIF-$MAJOR-latest. Not meant for overriding.
   _MAJOR_LATEST: '${_TAG_NAME%%.*}-latest'
-  _SERVICE_NAME: slack-notifier-service
-  _TAG_NAME: v1.0.0
+  _TAG_NAME: v1.0.1
+  _BUCKET_NAME: 'personaai-386104-notifiers-config'
   _DESTINATION_CONFIG_PATH: '${_BUCKET_NAME}/slack.yaml'
-  _BUCKET_NAME: 'bucket-store-slack-notifier'
   _BASE_PATH: './slack'
+  _SERVICE_NAME: slack-notifier
+  _SERVICE_REGION: 'asia-southeast1'
+
 tags:
   - cloud-build-notifiers-slack
   - slack-${_TAG_NAME}
