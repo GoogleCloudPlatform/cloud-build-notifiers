@@ -48,6 +48,7 @@ spec:
     delivery:
       server: smtp.gmail.com
       port: '587'
+      subject: '{{ if eq .Build.Status 3 }}✅ Build Successful ({{ .Build.Substitutions.REPO_NAME }}){{ else }}❌ Build Failure ({{ .Build.Substitutions.REPO_NAME }}){{ end }} | {{ if .Build.Substitutions._COMMIT_MESSAGE }} {{ if gt (len .Build.Substitutions._COMMIT_MESSAGE) 100 }}{{ slice .Build.Substitutions._COMMIT_MESSAGE 0 100 }}{{ else }}{{ .Build.Substitutions._COMMIT_MESSAGE }}{{ end }}{{ else }}{{ .Build.Substitutions.COMMIT_SHA }}{{ end }} [...]'
       sender: example-sender@gmail.com
       from: example-from@gmail.com
       recipients:
