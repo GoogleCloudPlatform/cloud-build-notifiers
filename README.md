@@ -1,5 +1,9 @@
 # Cloud Build Notifiers
 
+## 変更部分参照
+
+https://tech.toreta.in/entry/2022/12/22/notify-slack-of-cloud-build-results
+
 This repo provides deployable notifier images and sources, as well as libraries
 for creating new notifiers.
 

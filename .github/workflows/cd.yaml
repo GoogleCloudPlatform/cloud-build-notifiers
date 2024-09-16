@@ -1,0 +1,27 @@
+name: cd
+
+on:
+  push:
+    branches: ["master"]
+
+jobs:
+  update-notifier:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # 参考
+      # https://github.com/google-github-actions/setup-gcloud?tab=readme-ov-file#service-account-key-json
+      - id: "auth"
+        uses: "google-github-actions/auth@v2"
+        with:
+          credentials_json: "${{ secrets.GCP_CREDENTIALS }}"
+
+      - name: "Set up Cloud SDK"
+        uses: "google-github-actions/setup-gcloud@v2"
+
+      - name: "Set Region"
+        run: gcloud config set run/region asia-northeast1
+
+      - name: Update notifier
+        run: ./setup.sh slack ./google-cloud-notifier.yml -t slack/slack.json -s projects/387664188827/secrets/slack-webhook-url
