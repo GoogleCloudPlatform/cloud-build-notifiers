@@ -256,8 +256,10 @@ func Main(notifier Notifier) error {
 
 	// Block on the HTTP's health.
 	srv := &http.Server{
-		Addr:    ":" + port,
-		Handler: nil,
+		Addr:              ":" + port,
+		Handler:           nil,
+		ReadTimeout:       60 * time.Second,
+		ReadHeaderTimeout: 60 * time.Second,
 	}
 
 	return srv.ListenAndServe()
