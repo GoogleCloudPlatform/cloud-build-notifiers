@@ -255,7 +255,12 @@ func Main(notifier Notifier) error {
 	}
 
 	// Block on the HTTP's health.
-	return http.ListenAndServe(":"+port, nil)
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: nil,
+	}
+
+	return srv.ListenAndServe()
 }
 
 type gcsReaderFactory interface {
