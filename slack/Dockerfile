@@ -28,5 +28,10 @@ RUN set -x && apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -
     rm -rf /var/lib/apt/lists/*
 
 FROM alpine
+# Update and upgrade packages, including zlib
+RUN apk update && \
+    apk upgrade zlib && \
+    rm -rf /var/cache/apk/* \
+
 COPY --from=build-env /go-app /
 ENTRYPOINT ["/go-app", "--alsologtostderr", "--v=0"]
