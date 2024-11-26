@@ -1,6 +1,6 @@
 steps:
   - id: gokart
-    name: golang:1.16
+    name: golang:1.23
     entrypoint: 'bash'
     args:
      - -c
