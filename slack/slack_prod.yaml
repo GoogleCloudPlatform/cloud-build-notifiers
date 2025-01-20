@@ -18,7 +18,7 @@ metadata:
   name: slack-notifier
 spec:
   notification:
-    filter: build.status == Build.Status.SUCCESS || build.status == Build.Status.FAILURE || build.status == Build.Status.INTERNAL_ERROR || build.status == Build.Status.TIMEOUT || build.status == Build.Status.CANCELLED || build.status == Build.Status.EXPIRED
+    filter: (build.status == Build.Status.QUEUED || build.status == Build.Status.SUCCESS || build.status == Build.Status.FAILURE || build.status == Build.Status.INTERNAL_ERROR || build.status == Build.Status.TIMEOUT || build.status == Build.Status.CANCELLED || build.status == Build.Status.EXPIRED) && has(build.source)
     params: 
       buildStatus: $(build.status)
     delivery:
