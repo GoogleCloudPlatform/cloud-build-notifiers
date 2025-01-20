@@ -1,0 +1,29 @@
+[
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "Cloud Build \n* ID: {{.Build.Id}} \n* Status: {{.Params.buildStatus}}"
+      }
+    },
+    {
+      "type": "divider"
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "View Build Logs"
+      },
+      "accessory": {
+        "type": "button",
+        "text": {
+          "type": "plain_text",
+          "text": "Logs"
+        },
+        "value": "click_me_123",
+        "url": "{{.Build.LogUrl}}",
+        "action_id": "button-action"
+      }
+    }
+  ]
