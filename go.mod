@@ -10,7 +10,7 @@ require (
 	cloud.google.com/go/cloudbuild v1.16.0
 	cloud.google.com/go/secretmanager v1.12.0
 	cloud.google.com/go/storage v1.40.0
-	github.com/golang/glog v1.2.1
+	github.com/golang/glog v1.2.4
 	github.com/google/cel-go v0.20.1
 	github.com/google/go-cmp v0.6.0
 	github.com/google/go-containerregistry v0.19.1
