@@ -30,11 +30,11 @@ import (
 	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/google"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var tableResource = regexp.MustCompile(".*/.*/.*/(.*)/.*/(.*)")
@@ -218,16 +218,18 @@ func (n *bqNotifier) SendNotification(ctx context.Context, build *cbpb.Build) er
 	}
 	buildImages := []*buildImage{}
 	shaSet := make(map[string]bool)
-	for _, image := range build.GetImages() {
-		buildImage, err := imageManifestToBuildImage(image)
-		if err != nil {
-			return fmt.Errorf("error parsing image manifest: %v", err)
+	if build.Status == cbpb.Build_SUCCESS {
+		for _, image := range build.GetImages() {
+			buildImage, err := imageManifestToBuildImage(image)
+			if err != nil {
+				return fmt.Errorf("error parsing image manifest: %v", err)
+			}
+			if shaSet[buildImage.SHA] {
+				continue
+			}
+			shaSet[buildImage.SHA] = true
+			buildImages = append(buildImages, buildImage)
 		}
-		if shaSet[buildImage.SHA] {
-			continue
-		}
-		shaSet[buildImage.SHA] = true
-		buildImages = append(buildImages, buildImage)
 	}
 	buildSteps := []*buildStep{}
 	createTime, err := parsePBTime(build.CreateTime)
