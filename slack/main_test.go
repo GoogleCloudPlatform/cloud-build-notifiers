@@ -9,17 +9,39 @@ import (
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	"github.com/google/go-cmp/cmp"
 	"github.com/slack-go/slack"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/protoadapt"
 )
 
 func TestWriteMessage(t *testing.T) {
 	n := new(slackNotifier)
+
+	rawPubSubMessage := `{
+	  	"id": "111222333-4455-6677-8899-fa12345678",
+		"status": "SUCCESS",
+  		"projectId": "hello-world-123",
+		"logUrl": "https://some.example.com/log/url?foo=bar\"",
+		"substitutions": {
+			"_GOOGLE_FUNCTION_TARGET": "helloHttp",
+		}
+	}`
+	
+	uo := protojson.UnmarshalOptions{
+		AllowPartial:   true,
+		DiscardUnknown: true,
+	}
+	
+	build := new(cbpb.Build)
+	bv2 := protoadapt.MessageV2Of(build)
+	uo.Unmarshal([]byte(rawPubSubMessage), bv2)
+	build = protoadapt.MessageV1Of(bv2).(*cbpb.Build)
 
 	blockKitTemplate := `[
 		{
 		  "type": "section",
 		  "text": {
 			"type": "mrkdwn",
-			"text": "Build Status: {{.Build.Status}}"
+			"text": "Build {{.Build.Substitutions._GOOGLE_FUNCTION_TARGET}} Status: {{.Build.Status}}"
 		  }
 		},
 		{
@@ -52,13 +74,9 @@ func TestWriteMessage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to parse template: %v", err)
 	}
+
 	n.tmpl = tmpl
-	n.tmplView = &notifiers.TemplateView{Build: &notifiers.BuildView{Build: &cbpb.Build{
-		ProjectId: "my-project-id",
-		Id:        "some-build-id",
-		Status:    cbpb.Build_SUCCESS,
-		LogUrl:    "https://some.example.com/log/url?foo=bar\"",
-	}}}
+	n.tmplView = &notifiers.TemplateView{Build: &notifiers.BuildView{Build: build}}
 
 	got, err := n.writeMessage()
 	if err != nil {
@@ -74,7 +92,7 @@ func TestWriteMessage(t *testing.T) {
 						Type: "section",
 						Text: &slack.TextBlockObject{
 							Type: "mrkdwn",
-							Text: "Build Status: SUCCESS",
+							Text: "Build helloHttp Status: SUCCESS",
 						},
 					},
 					&slack.DividerBlock{
