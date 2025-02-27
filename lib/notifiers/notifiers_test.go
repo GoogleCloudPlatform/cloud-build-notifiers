@@ -300,9 +300,9 @@ func TestGetGCSConfig(t *testing.T) {
 	validFakeFactory := &fakeGCSReaderFactory{
 		data: map[string]string{
 			"gs://path/to/my/config.yaml":                 validYAML,
-			"gs://bucket-with-dash/dir/config.yaml":       validYAML,
+			"gs://fakebucket-with-dash/dir/config.yaml":       validYAML,
 			"gs://bucket.with.dot/dir/config.yaml":        validYAML,
-			"gs://bucket_with_underscore/dir/config.yaml": validYAML,
+			"gs://fakebucket_with_underscore/dir/config.yaml": validYAML,
 		},
 	}
 
@@ -320,7 +320,7 @@ func TestGetGCSConfig(t *testing.T) {
 			wantConfig: validConfig,
 		}, {
 			name:       "valid and present config in bucket with dashes",
-			path:       "gs://bucket-with-dash/dir/config.yaml",
+			path:       "gs://fakebucket-with-dash/dir/config.yaml",
 			fake:       validFakeFactory,
 			wantConfig: validConfig,
 		}, {
@@ -330,7 +330,7 @@ func TestGetGCSConfig(t *testing.T) {
 			wantConfig: validConfig,
 		}, {
 			name:       "valid and present config in bucket with underscores",
-			path:       "gs://bucket_with_underscore/dir/config.yaml",
+			path:       "gs://fakebucket_with_underscore/dir/config.yaml",
 			fake:       validFakeFactory,
 			wantConfig: validConfig,
 		}, {
