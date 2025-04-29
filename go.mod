@@ -1,6 +1,7 @@
 module github.com/GoogleCloudPlatform/cloud-build-notifiers
 
-go 1.21
+go 1.23.0
+
 toolchain go1.24.1
 
 replace github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers => ./lib/notifiers
