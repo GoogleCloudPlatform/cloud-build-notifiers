@@ -181,6 +181,15 @@ func TestMakeCELPredicate(t *testing.T) {
 			filter:    `build.status in [Build.Status.FAILURE, Build.Status.TIMEOUT] && build.substitutions["TAG_NAME"].matches("^v\\d{1}\\.\\d{1}\\.\\d{3}$")`,
 			build:     &cbpb.Build{Status: cbpb.Build_TIMEOUT, Substitutions: map[string]string{"TAG_NAME": "v1.2.003"}},
 			wantMatch: true,
+		}, {
+			name:      "complex filter with enumeration to sub-object",
+			filter:    `build.steps.filter(step, !step.id.contains("Build") && !step.id.contains("Test")).exists_one(step, step.status in [Build.Status.FAILURE, Build.Status.INTERNAL_ERROR])`,
+			build:     &cbpb.Build{Status: cbpb.Build_FAILURE, Steps: []*cbpb.BuildStep{
+				&cbpb.BuildStep{Id: "Build", Status: cbpb.Build_FAILURE}, 
+				&cbpb.BuildStep{Id: "Test", Status: cbpb.Build_SUCCESS}, 
+				&cbpb.BuildStep{Id: "Deploy", Status: cbpb.Build_INTERNAL_ERROR},
+			}},
+			wantMatch: true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
