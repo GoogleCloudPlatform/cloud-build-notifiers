@@ -1,0 +1,16 @@
+apiVersion: cloud-build-notifiers/v1
+kind: PrometheusNotifier
+metadata:
+  name: example-prometheus-notifier
+spec:
+  notification:
+    filter: build.status == Build.Status.SUCCESS
+    delivery:
+      url: https://prometheus-server:9090/api/v1/write
+      # Optional basic auth configuration
+      username: prometheus-user
+      password:
+        secretRef: prometheus-password
+  secrets:
+  - name: prometheus-password
+    value: projects/example-project/secrets/example-prometheus-password/versions/latest
