@@ -252,7 +252,7 @@ func Main(notifier Notifier) error {
 
 	tmpl, err := parseTemplate(ctx, cfg.Spec.Notification.Template, &actualGCSReaderFactory{sc})
 	if err != nil {
-		return fmt.Errorf("failed to parse template from notiifer spec %q: %w", cfg.Spec.Notification.Template, err)
+		return fmt.Errorf("failed to parse template from notifier spec %q: %w", cfg.Spec.Notification.Template, err)
 	}
 
 	sm := &actualSecretManager{client: smc}
