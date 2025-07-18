@@ -22,80 +22,103 @@ import (
 
 	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/config"
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/snappy"
+	promconfig "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/storage/remote"
 	log "github.com/golang/glog"
 )
 
 const (
-	urlKey = "url"
+	urlKey      = "url"
 	usernameKey = "username"
 	passwordKey = "password"
 )
 
 func main() {
+	log.Infof("Starting Prometheus notifier...")
 	if err := notifiers.Main(new(prometheusNotifier)); err != nil {
 		log.Fatalf("fatal error: %v", err)
 	}
 }
 
 type prometheusNotifier struct {
-	filter notifiers.EventFilter
-	client *remote.Client
-	config *remote.ClientConfig
+	filter       notifiers.EventFilter
+	client       remote.WriteClient
+	clientConfig *remote.ClientConfig
 }
 
 func (p *prometheusNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ string, sg notifiers.SecretGetter, _ notifiers.BindingResolver) error {
+	log.Infof("Setting up Prometheus notifier with config: %+v", cfg.Spec.Notification.Delivery)
+
 	// Set up CEL filter
+	log.V(2).Infof("Creating CEL predicate from filter: %v", cfg.Spec.Notification.Filter)
 	prd, err := notifiers.MakeCELPredicate(cfg.Spec.Notification.Filter)
 	if err != nil {
+		log.Errorf("Failed to make CEL predicate: %v", err)
 		return fmt.Errorf("failed to make a CEL predicate: %w", err)
 	}
 	p.filter = prd
+	log.V(2).Infof("CEL predicate created successfully")
 
 	// Validate and get remote write URL
 	urlStr, ok := cfg.Spec.Notification.Delivery[urlKey].(string)
 	if !ok || urlStr == "" {
+		log.Errorf("Missing or invalid delivery.url in config")
 		return fmt.Errorf("delivery.url is required")
 	}
+	log.V(2).Infof("Using Prometheus remote write URL: %s", urlStr)
 
 	// Parse URL to validate format
 	parsedURL, err := url.Parse(urlStr)
 	if err != nil {
+		log.Errorf("Failed to parse URL %s: %v", urlStr, err)
 		return fmt.Errorf("invalid delivery.url: %w", err)
 	}
+	log.V(2).Infof("URL parsed successfully: %s", parsedURL.String())
 
 	// Configure basic auth if username is provided
-	var httpConfig config.HTTPClientConfig
+	var httpConfig promconfig.HTTPClientConfig
 	if username, ok := cfg.Spec.Notification.Delivery[usernameKey].(string); ok && username != "" {
+		log.V(2).Infof("Configuring basic auth for username: %s", username)
+
 		// Get password from secret if username is set
 		passwordRef, err := notifiers.GetSecretRef(cfg.Spec.Notification.Delivery, passwordKey)
 		if err != nil {
+			log.Errorf("Failed to get password secret reference: %v", err)
 			return fmt.Errorf("password secret reference is required when username is set: %w", err)
 		}
+		log.V(2).Infof("Password secret reference: %s", passwordRef)
+
 		passwordResource, err := notifiers.FindSecretResourceName(cfg.Spec.Secrets, passwordRef)
 		if err != nil {
+			log.Errorf("Failed to find secret resource for ref %q: %v", passwordRef, err)
 			return fmt.Errorf("failed to find Secret for ref %q: %w", passwordRef, err)
 		}
+		log.V(2).Infof("Password secret resource: %s", passwordResource)
+
 		password, err := sg.GetSecret(ctx, passwordResource)
 		if err != nil {
+			log.Errorf("Failed to get password secret: %v", err)
 			return fmt.Errorf("failed to get password secret: %w", err)
 		}
+		log.V(3).Infof("Password secret retrieved successfully (length: %d)", len(password))
 
-		httpConfig = config.HTTPClientConfig{
-			BasicAuth: &config.BasicAuth{
+		httpConfig = promconfig.HTTPClientConfig{
+			BasicAuth: &promconfig.BasicAuth{
 				Username: username,
-				Password: config.Secret(password),
+				Password: promconfig.Secret(password),
 			},
 		}
+		log.V(2).Infof("Basic auth configured successfully")
+	} else {
+		log.V(2).Infof("No basic auth configured - using unauthenticated requests")
 	}
 
-	p.config = &remote.ClientConfig{
-		URL: &config_util.URL{
+	p.clientConfig = &remote.ClientConfig{
+		URL: &promconfig.URL{
 			URL: parsedURL,
 		},
 		Timeout: model.Duration(30 * time.Second),
@@ -104,35 +127,41 @@ func (p *prometheusNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _
 			"X-Prometheus-Remote-Write-Version": "0.1.0",
 		},
 		RetryOnRateLimit: true,
-		WriteProtoMsg:    config.RemoteWriteProtoMsgV1,
 	}
+	log.V(2).Infof("Client config created: timeout=%v, retryOnRateLimit=%v", p.clientConfig.Timeout, p.clientConfig.RetryOnRateLimit)
 
-	client, err := remote.NewWriteClient("cloudbuild", p.config)
+	client, err := remote.NewWriteClient("cloudbuild", p.clientConfig)
 	if err != nil {
+		log.Errorf("Failed to create remote write client: %v", err)
 		return fmt.Errorf("failed to create remote write client: %w", err)
 	}
 	p.client = client
-
+	log.Infof("Prometheus notifier setup completed successfully")
 	return nil
 }
 
 func (p *prometheusNotifier) SendNotification(ctx context.Context, build *cbpb.Build) error {
+	log.V(2).Infof("Processing build notification: ID=%s, Status=%s, Project=%s", build.Id, build.Status, build.ProjectId)
+
 	if !p.filter.Apply(ctx, build) {
-		log.V(2).Infof("not sending metrics for event (build id = %s, status = %v)", build.Id, build.Status)
+		log.V(2).Infof("Build filtered out (build id = %s, status = %v)", build.Id, build.Status)
 		return nil
 	}
 
-	log.Infof("sending metrics for Build %q (status: %q)", build.Id, build.Status)
+	log.Infof("Sending metrics for Build %q (status: %q, project: %q)", build.Id, build.Status, build.ProjectId)
 
 	// Collect metrics from build
+	log.V(2).Infof("Collecting metrics for build %s", build.Id)
 	metrics := p.collectMetrics(build)
+	log.V(2).Infof("Collected %d metrics for build %s", len(metrics), build.Id)
 
 	// Write metrics to Prometheus
 	if err := p.writeMetrics(ctx, metrics); err != nil {
+		log.Errorf("Failed to write metrics for build %s: %v", build.Id, err)
 		return fmt.Errorf("failed to write metrics: %w", err)
 	}
 
-	log.V(2).Infoln("metrics sent successfully")
+	log.Infof("Successfully sent %d metrics for build %s", len(metrics), build.Id)
 	return nil
 }
 
@@ -145,20 +174,24 @@ func (p *prometheusNotifier) collectMetrics(build *cbpb.Build) []prompb.TimeSeri
 		"trigger_name":     build.Substitutions["TRIGGER_NAME"],
 		"repo_name":        build.Substitutions["REPO_NAME"],
 		"commit_sha":       build.Substitutions["SHORT_SHA"],
-		"status":          build.Status.String(),
-		"machine_type":    build.Options.GetMachineType().String(),
+		"status":           build.Status.String(),
+		"machine_type":     build.Options.GetMachineType().String(),
 	}
+	log.V(3).Infof("Common labels for build %s: %+v", build.Id, commonLabels)
 
 	// Add branch/tag information
 	if branch := build.Substitutions["BRANCH_NAME"]; branch != "" {
 		commonLabels["ref_type"] = "branch"
 		commonLabels["ref"] = branch
+		log.V(3).Infof("Build %s is on branch: %s", build.Id, branch)
 	} else if tag := build.Substitutions["TAG_NAME"]; tag != "" {
 		commonLabels["ref_type"] = "tag"
 		commonLabels["ref"] = tag
+		log.V(3).Infof("Build %s is on tag: %s", build.Id, tag)
 	} else {
 		commonLabels["ref_type"] = "unknown"
 		commonLabels["ref"] = "[no branch or tag]"
+		log.V(3).Infof("Build %s has no branch or tag information", build.Id)
 	}
 
 	// Add failure information if available
@@ -172,15 +205,19 @@ func (p *prometheusNotifier) collectMetrics(build *cbpb.Build) []prompb.TimeSeri
 	// Build duration metric
 	if build.StartTime != nil && build.FinishTime != nil {
 		duration := build.FinishTime.AsTime().Sub(build.StartTime.AsTime()).Seconds()
+		log.V(3).Infof("Build %s duration: %.2f seconds", build.Id, duration)
 		metrics = append(metrics, p.createHistogramMetric(
 			"cloudbuild_build_duration_seconds",
 			duration,
 			commonLabels,
 		))
+	} else {
+		log.V(2).Infof("Build %s missing start/finish time - skipping duration metric", build.Id)
 	}
 
 	// Step duration metrics
-	for _, step := range build.Steps {
+	log.V(3).Infof("Processing %d steps for build %s", len(build.Steps), build.Id)
+	for i, step := range build.Steps {
 		if step.Timing != nil {
 			duration := step.Timing.EndTime.AsTime().Sub(step.Timing.StartTime.AsTime()).Seconds()
 			stepLabels := make(map[string]string)
@@ -191,11 +228,14 @@ func (p *prometheusNotifier) collectMetrics(build *cbpb.Build) []prompb.TimeSeri
 			stepLabels["step_status"] = step.Status.String()
 			stepLabels["step_id"] = step.Id
 
+			log.V(3).Infof("Step %d (%s) duration: %.2f seconds, status: %s", i+1, step.Name, duration, step.Status)
 			metrics = append(metrics, p.createHistogramMetric(
 				"cloudbuild_step_duration_seconds",
 				duration,
 				stepLabels,
 			))
+		} else {
+			log.V(3).Infof("Step %d (%s) missing timing information - skipping duration metric", i+1, step.Name)
 		}
 	}
 
@@ -205,26 +245,41 @@ func (p *prometheusNotifier) collectMetrics(build *cbpb.Build) []prompb.TimeSeri
 		1.0,
 		commonLabels,
 	))
+	log.V(3).Infof("Added last run status metric for build %s", build.Id)
 
 	return metrics
 }
 
 func (p *prometheusNotifier) writeMetrics(ctx context.Context, metrics []prompb.TimeSeries) error {
+	log.V(2).Infof("Preparing to write %d metrics to Prometheus", len(metrics))
+
 	req := &prompb.WriteRequest{
 		Timeseries: metrics,
 	}
 
 	data, err := proto.Marshal(req)
 	if err != nil {
+		log.Errorf("Failed to marshal write request: %v", err)
 		return fmt.Errorf("failed to marshal write request: %w", err)
 	}
+	log.V(3).Infof("Marshaled write request: %d bytes", len(data))
 
 	compressed := snappy.Encode(nil, data)
-	_, err = p.client.Store(ctx, compressed, 0)
-	return err
+	log.V(3).Infof("Compressed data: %d bytes (compression ratio: %.2f)", len(compressed), float64(len(compressed))/float64(len(data)))
+
+	log.V(2).Infof("Sending metrics to Prometheus remote write endpoint")
+	err = p.client.Store(ctx, compressed, 0)
+	if err != nil {
+		log.Errorf("Failed to store metrics: %v", err)
+		return err
+	}
+
+	log.V(2).Infof("Successfully stored %d metrics to Prometheus", len(metrics))
+	return nil
 }
 
 func (p *prometheusNotifier) createHistogramMetric(name string, value float64, labels map[string]string) prompb.TimeSeries {
+	log.V(4).Infof("Creating histogram metric: %s = %f with labels: %+v", name, value, labels)
 	return prompb.TimeSeries{
 		Labels: p.createLabels(name, labels),
 		Samples: []prompb.Sample{
@@ -237,6 +292,7 @@ func (p *prometheusNotifier) createHistogramMetric(name string, value float64, l
 }
 
 func (p *prometheusNotifier) createGaugeMetric(name string, value float64, labels map[string]string) prompb.TimeSeries {
+	log.V(4).Infof("Creating gauge metric: %s = %f with labels: %+v", name, value, labels)
 	return prompb.TimeSeries{
 		Labels: p.createLabels(name, labels),
 		Samples: []prompb.Sample{
@@ -261,5 +317,6 @@ func (p *prometheusNotifier) createLabels(name string, labels map[string]string)
 			Value: v,
 		})
 	}
+	log.V(4).Infof("Created %d labels for metric %s", len(result), name)
 	return result
 }
