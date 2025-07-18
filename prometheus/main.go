@@ -22,13 +22,13 @@ import (
 
 	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
+	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/snappy"
 	promconfig "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/storage/remote"
-	log "github.com/golang/glog"
 )
 
 const (
@@ -121,7 +121,7 @@ func (p *prometheusNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _
 		URL: &promconfig.URL{
 			URL: parsedURL,
 		},
-		Timeout: model.Duration(30 * time.Second),
+		Timeout:          model.Duration(30 * time.Second),
 		HTTPClientConfig: httpConfig,
 		Headers: map[string]string{
 			"X-Prometheus-Remote-Write-Version": "0.1.0",

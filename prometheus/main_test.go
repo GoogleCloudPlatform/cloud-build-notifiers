@@ -42,10 +42,10 @@ func (f *fakeSecretGetter) GetSecret(_ context.Context, name string) (string, er
 // createCompleteBuild creates a build with all required substitutions and fields
 func createCompleteBuild(id, projectID string, status cbpb.Build_Status, startTime, finishTime time.Time) *cbpb.Build {
 	return &cbpb.Build{
-		Id:        id,
-		ProjectId: projectID,
-		Status:    status,
-		StartTime: timestamppb.New(startTime),
+		Id:         id,
+		ProjectId:  projectID,
+		Status:     status,
+		StartTime:  timestamppb.New(startTime),
 		FinishTime: timestamppb.New(finishTime),
 		Substitutions: map[string]string{
 			"TRIGGER_NAME": "test-trigger",
@@ -214,10 +214,10 @@ func TestCollectMetrics(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		name           string
-		build          *cbpb.Build
-		expectedCount  int
-		description    string
+		name          string
+		build         *cbpb.Build
+		expectedCount int
+		description   string
 	}{
 		{
 			name:          "complete build with all fields",
@@ -485,7 +485,7 @@ func TestSendNotificationWithDifferentBuildTypes(t *testing.T) {
 					Notification: &notifiers.Notification{
 						Filter: tt.filter,
 						Delivery: map[string]interface{}{
-							"url": "http://example.com:9090/api/v1/write",
+							"url":      "http://example.com:9090/api/v1/write",
 							"username": "michaelact",
 							"password": map[interface{}]interface{}{
 								"secretRef": "prometheus-password",
