@@ -252,9 +252,17 @@ func (p *prometheusNotifier) collectMetrics(build *cbpb.Build) []prompb.TimeSeri
 	} else {
 		statusTimestamp = time.Now().UnixNano() / int64(time.Millisecond)
 	}
+
+	var lastRunStatusValue float64
+	if build.Status == cbpb.Build_SUCCESS {
+		lastRunStatusValue = 1.0
+	} else {
+		lastRunStatusValue = 0.0
+	}
+
 	metrics = append(metrics, p.createGaugeMetric(
 		"cloudbuild_build_last_run_status",
-		1.0,
+		lastRunStatusValue,
 		commonLabels,
 		statusTimestamp,
 	))
