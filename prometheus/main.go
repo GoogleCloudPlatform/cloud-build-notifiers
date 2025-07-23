@@ -165,6 +165,8 @@ func (p *prometheusNotifier) SendNotification(ctx context.Context, build *cbpb.B
 	return nil
 }
 
+// CAUTION: HIGH CARDINALITY
+// Ref: https://prometheus.io/docs/practices/naming/#:~:text=CAUTION%3A%20Remember,sets%20of%20values.
 func (p *prometheusNotifier) collectMetrics(build *cbpb.Build) []prompb.TimeSeries {
 	var metrics []prompb.TimeSeries
 
@@ -173,7 +175,7 @@ func (p *prometheusNotifier) collectMetrics(build *cbpb.Build) []prompb.TimeSeri
 		"cloud_account_id": build.ProjectId,
 		"trigger_name":     build.Substitutions["TRIGGER_NAME"],
 		"repo_name":        build.Substitutions["REPO_NAME"],
-		"commit_sha":       build.Substitutions["SHORT_SHA"],
+		// "commit_sha":       build.Substitutions["SHORT_SHA"], // CAUTION: HIGH CARDINALITY
 		"status":           build.Status.String(),
 		"machine_type":     build.Options.GetMachineType().String(),
 	}
@@ -195,21 +197,21 @@ func (p *prometheusNotifier) collectMetrics(build *cbpb.Build) []prompb.TimeSeri
 	}
 
 	// Add failure information if available
-	// CAUTION: HIGH CARDINALITY
-	// Ref: https://prometheus.io/docs/practices/naming/#:~:text=CAUTION%3A%20Remember,sets%20of%20values.
-	// if build.FailureInfo != nil {
-	// 	commonLabels["failure_type"] = build.FailureInfo.GetType().String()
-	// 	commonLabels["failure_detail"] = build.FailureInfo.GetDetail()
-	// }
+	if build.FailureInfo != nil {
+		commonLabels["failure_type"] = build.FailureInfo.GetType().String()
+		// commonLabels["failure_detail"] = build.FailureInfo.GetDetail() // CAUTION: HIGH CARDINALITY
+	}
 
 	// Build duration metric
 	if build.StartTime != nil && build.FinishTime != nil {
 		duration := build.FinishTime.AsTime().Sub(build.StartTime.AsTime()).Seconds()
+		timestamp := build.FinishTime.AsTime().UnixNano() / int64(time.Millisecond)
 		log.V(3).Infof("Build %s duration: %.2f seconds", build.Id, duration)
 		metrics = append(metrics, p.createHistogramMetric(
 			"cloudbuild_build_duration_seconds",
 			duration,
 			commonLabels,
+			timestamp,
 		))
 	} else {
 		log.V(2).Infof("Build %s missing start/finish time - skipping duration metric", build.Id)
@@ -220,6 +222,7 @@ func (p *prometheusNotifier) collectMetrics(build *cbpb.Build) []prompb.TimeSeri
 	for i, step := range build.Steps {
 		if step.Timing != nil {
 			duration := step.Timing.EndTime.AsTime().Sub(step.Timing.StartTime.AsTime()).Seconds()
+			timestamp := step.Timing.EndTime.AsTime().UnixNano() / int64(time.Millisecond)
 			stepLabels := make(map[string]string)
 			for k, v := range commonLabels {
 				stepLabels[k] = v
@@ -233,6 +236,7 @@ func (p *prometheusNotifier) collectMetrics(build *cbpb.Build) []prompb.TimeSeri
 				"cloudbuild_step_duration_seconds",
 				duration,
 				stepLabels,
+				timestamp,
 			))
 		} else {
 			log.V(3).Infof("Step %d (%s) missing timing information - skipping duration metric", i+1, step.Name)
@@ -240,10 +244,19 @@ func (p *prometheusNotifier) collectMetrics(build *cbpb.Build) []prompb.TimeSeri
 	}
 
 	// Last run status metric
+	var statusTimestamp int64
+	if build.FinishTime != nil {
+		statusTimestamp = build.FinishTime.AsTime().UnixNano() / int64(time.Millisecond)
+	} else if build.StartTime != nil {
+		statusTimestamp = build.StartTime.AsTime().UnixNano() / int64(time.Millisecond)
+	} else {
+		statusTimestamp = time.Now().UnixNano() / int64(time.Millisecond)
+	}
 	metrics = append(metrics, p.createGaugeMetric(
 		"cloudbuild_build_last_run_status",
 		1.0,
 		commonLabels,
+		statusTimestamp,
 	))
 	log.V(3).Infof("Added last run status metric for build %s", build.Id)
 
@@ -278,27 +291,27 @@ func (p *prometheusNotifier) writeMetrics(ctx context.Context, metrics []prompb.
 	return nil
 }
 
-func (p *prometheusNotifier) createHistogramMetric(name string, value float64, labels map[string]string) prompb.TimeSeries {
-	log.V(4).Infof("Creating histogram metric: %s = %f with labels: %+v", name, value, labels)
+func (p *prometheusNotifier) createHistogramMetric(name string, value float64, labels map[string]string, timestamp int64) prompb.TimeSeries {
+	log.V(4).Infof("Creating histogram metric: %s = %f with labels: %+v, timestamp: %d", name, value, labels, timestamp)
 	return prompb.TimeSeries{
 		Labels: p.createLabels(name, labels),
 		Samples: []prompb.Sample{
 			{
 				Value:     value,
-				Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
+				Timestamp: timestamp,
 			},
 		},
 	}
 }
 
-func (p *prometheusNotifier) createGaugeMetric(name string, value float64, labels map[string]string) prompb.TimeSeries {
-	log.V(4).Infof("Creating gauge metric: %s = %f with labels: %+v", name, value, labels)
+func (p *prometheusNotifier) createGaugeMetric(name string, value float64, labels map[string]string, timestamp int64) prompb.TimeSeries {
+	log.V(4).Infof("Creating gauge metric: %s = %f with labels: %+v, timestamp: %d", name, value, labels, timestamp)
 	return prompb.TimeSeries{
 		Labels: p.createLabels(name, labels),
 		Samples: []prompb.Sample{
 			{
 				Value:     value,
-				Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
+				Timestamp: timestamp,
 			},
 		},
 	}
