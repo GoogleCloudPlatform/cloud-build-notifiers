@@ -25,8 +25,14 @@ RUN go build -o /go-app .
 # https://hub.docker.com/_/debian
 # https://docs.docker.com/develop/develop-images/multistage-build/#use-multi-stage-builds
 FROM debian:buster-slim
-RUN set -x && apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    ca-certificates && \
+# Modify sources.list to point to the Debian archive
+RUN sed -i 's|deb.debian.org|archive.debian.org|g' /etc/apt/sources.list && \
+    sed -i 's|security.debian.org|archive.debian.org/debian-security|g' /etc/apt/sources.list && \
+    sed -i '/buster-updates/d' /etc/apt/sources.list && \
+    echo "deb http://archive.debian.org/debian buster-updates main contrib non-free" >> /etc/apt/sources.list && \
+    set -x && \
+    apt-get update --allow-releaseinfo-change && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 FROM gcr.io/distroless/base
