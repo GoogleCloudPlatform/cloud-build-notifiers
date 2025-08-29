@@ -217,6 +217,21 @@ func (p *prometheusNotifier) collectMetrics(build *cbpb.Build) []prompb.TimeSeri
 		log.V(2).Infof("Build %s missing start/finish time - skipping duration metric", build.Id)
 	}
 
+	// Queue duration metric
+	if build.CreateTime != nil && build.StartTime != nil {
+		duration := build.StartTime.AsTime().Sub(build.CreateTime.AsTime()).Seconds()
+		timestamp := build.StartTime.AsTime().UnixNano() / int64(time.Millisecond)
+		log.V(3).Infof("Build %s queue duration: %.2f seconds", build.Id, duration)
+		metrics = append(metrics, p.createHistogramMetric(
+			"cloudbuild_build_queue_duration_seconds",
+			duration,
+			commonLabels,
+			timestamp,
+		))
+	} else {
+		log.V(2).Infof("Build %s missing create/start time - skipping queue duration metric", build.Id)
+	}
+
 	// Step duration metrics
 	log.V(3).Infof("Processing %d steps for build %s", len(build.Steps), build.Id)
 	for i, step := range build.Steps {
