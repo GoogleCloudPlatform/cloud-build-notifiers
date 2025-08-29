@@ -266,7 +266,14 @@ func (p *prometheusNotifier) collectMetrics(build *cbpb.Build) []prompb.TimeSeri
 		commonLabels,
 		statusTimestamp,
 	))
-	log.V(3).Infof("Added last run status metric for build %s", build.Id)
+
+	metrics = append(metrics, p.createGaugeMetric(
+		"cloudbuild_build_timestamp",
+		statusTimestamp,
+		commonLabels,
+		statusTimestamp,
+	))
+	log.V(3).Infof("Added build timestamp metric for build %s", build.Id)
 
 	return metrics
 }
