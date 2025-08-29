@@ -26,7 +26,7 @@ import (
 )
 
 const prometheusPasswordResource = "projects/test/secrets/prometheus-password/versions/latest"
-const prometheusPassword = "michaelact"
+const prometheusPassword = "prometheus-password"
 
 type fakeSecretGetter struct{}
 
@@ -40,11 +40,12 @@ func (f *fakeSecretGetter) GetSecret(_ context.Context, name string) (string, er
 }
 
 // createCompleteBuild creates a build with all required substitutions and fields
-func createCompleteBuild(id, projectID string, status cbpb.Build_Status, startTime, finishTime time.Time) *cbpb.Build {
+func createCompleteBuild(id, projectID string, status cbpb.Build_Status, createTime, startTime, finishTime time.Time) *cbpb.Build {
 	return &cbpb.Build{
 		Id:         id,
 		ProjectId:  projectID,
 		Status:     status,
+		CreateTime: timestamppb.New(createTime),
 		StartTime:  timestamppb.New(startTime),
 		FinishTime: timestamppb.New(finishTime),
 		Substitutions: map[string]string{
@@ -81,16 +82,16 @@ func createCompleteBuild(id, projectID string, status cbpb.Build_Status, startTi
 }
 
 // createTagBuild creates a build with tag instead of branch
-func createTagBuild(id, projectID string, status cbpb.Build_Status, startTime, finishTime time.Time) *cbpb.Build {
-	build := createCompleteBuild(id, projectID, status, startTime, finishTime)
+func createTagBuild(id, projectID string, status cbpb.Build_Status, createTime, startTime, finishTime time.Time) *cbpb.Build {
+	build := createCompleteBuild(id, projectID, status, createTime, startTime, finishTime)
 	build.Substitutions["BRANCH_NAME"] = ""
 	build.Substitutions["TAG_NAME"] = "v1.0.0"
 	return build
 }
 
 // createBuildWithoutRef creates a build without branch or tag
-func createBuildWithoutRef(id, projectID string, status cbpb.Build_Status, startTime, finishTime time.Time) *cbpb.Build {
-	build := createCompleteBuild(id, projectID, status, startTime, finishTime)
+func createBuildWithoutRef(id, projectID string, status cbpb.Build_Status, createTime, startTime, finishTime time.Time) *cbpb.Build {
+	build := createCompleteBuild(id, projectID, status, createTime, startTime, finishTime)
 	build.Substitutions["BRANCH_NAME"] = ""
 	build.Substitutions["TAG_NAME"] = ""
 	return build
@@ -98,15 +99,15 @@ func createBuildWithoutRef(id, projectID string, status cbpb.Build_Status, start
 
 // createBuildWithoutTiming creates a build without start/finish times
 func createBuildWithoutTiming(id, projectID string, status cbpb.Build_Status) *cbpb.Build {
-	build := createCompleteBuild(id, projectID, status, time.Now(), time.Now().Add(time.Minute))
+	build := createCompleteBuild(id, projectID, status, time.Now(), time.Now().Add(30*time.Second), time.Now().Add(time.Minute))
 	build.StartTime = nil
 	build.FinishTime = nil
 	return build
 }
 
 // createBuildWithStepsWithoutTiming creates a build with steps that don't have timing
-func createBuildWithStepsWithoutTiming(id, projectID string, status cbpb.Build_Status, startTime, finishTime time.Time) *cbpb.Build {
-	build := createCompleteBuild(id, projectID, status, startTime, finishTime)
+func createBuildWithStepsWithoutTiming(id, projectID string, status cbpb.Build_Status, createTime, startTime, finishTime time.Time) *cbpb.Build {
+	build := createCompleteBuild(id, projectID, status, createTime, startTime, finishTime)
 	build.Steps[0].Timing = nil
 	build.Steps[1].Timing = nil
 	return build
@@ -151,7 +152,7 @@ func TestSetUp(t *testing.T) {
 		// 			Notification: &notifiers.Notification{
 		// 				Filter: "build.status == Build.Status.SUCCESS",
 		// 				Delivery: map[string]interface{}{
-		// 					"url": "http://example.com:9090/api/v1/write",
+		// 					"url": "http://example.com/api/v1/write",
 		// 				},
 		// 			},
 		// 		},
@@ -165,8 +166,8 @@ func TestSetUp(t *testing.T) {
 					Notification: &notifiers.Notification{
 						Filter: "build.status == Build.Status.SUCCESS",
 						Delivery: map[string]interface{}{
-							"url":      "http://example.com:9090/api/v1/write",
-							"username": "michaelact",
+							"url":      "http://example.com/api/v1/write",
+							"username": "prometheus-username",
 							"password": map[interface{}]interface{}{
 								"secretRef": "prometheus-password",
 							},
@@ -189,8 +190,8 @@ func TestSetUp(t *testing.T) {
 		// 			Notification: &notifiers.Notification{
 		// 				Filter: "build.status == Build.Status.SUCCESS",
 		// 				Delivery: map[string]interface{}{
-		// 					"url":      "http://example.com:9090/api/v1/write",
-		// 					"username": "michaelact",
+		// 					"url":      "http://example.com/api/v1/write",
+		// 					"username": "prometheus-username",
 		// 				},
 		// 			},
 		// 		},
@@ -212,6 +213,9 @@ func TestSetUp(t *testing.T) {
 
 func TestCollectMetrics(t *testing.T) {
 	now := time.Now()
+	createTime := now.Add(-30 * time.Second)
+	startTime := now
+	finishTime := now.Add(time.Minute)
 
 	tests := []struct {
 		name          string
@@ -221,38 +225,32 @@ func TestCollectMetrics(t *testing.T) {
 	}{
 		{
 			name:          "complete build with all fields",
-			build:         createCompleteBuild("test-build-1", "test-project", cbpb.Build_SUCCESS, now, now.Add(time.Minute)),
-			expectedCount: 4, // build duration + 2 step durations + last run status
+			build:         createCompleteBuild("test-build-1", "test-project", cbpb.Build_SUCCESS, createTime, startTime, finishTime),
+			expectedCount: 6, // build duration + queue duration + 2 step durations + last run status + timestamp
 			description:   "Build with all timing information and 2 steps",
 		},
 		{
 			name:          "tag build",
-			build:         createTagBuild("test-build-2", "test-project", cbpb.Build_SUCCESS, now, now.Add(time.Minute)),
-			expectedCount: 4, // build duration + 2 step durations + last run status
+			build:         createTagBuild("test-build-2", "test-project", cbpb.Build_SUCCESS, createTime, startTime, finishTime),
+			expectedCount: 6, // build duration + queue duration + 2 step durations + last run status + timestamp
 			description:   "Build with tag instead of branch",
 		},
 		{
 			name:          "build without ref",
-			build:         createBuildWithoutRef("test-build-3", "test-project", cbpb.Build_SUCCESS, now, now.Add(time.Minute)),
-			expectedCount: 4, // build duration + 2 step durations + last run status
+			build:         createBuildWithoutRef("test-build-3", "test-project", cbpb.Build_SUCCESS, createTime, startTime, finishTime),
+			expectedCount: 6, // build duration + queue duration + 2 step durations + last run status + timestamp
 			description:   "Build without branch or tag information",
 		},
 		{
-			name:          "build without timing",
-			build:         createBuildWithoutTiming("test-build-4", "test-project", cbpb.Build_SUCCESS),
-			expectedCount: 3, // 2 step durations + last run status (no build duration)
-			description:   "Build without start/finish times",
-		},
-		{
 			name:          "build with steps without timing",
-			build:         createBuildWithStepsWithoutTiming("test-build-5", "test-project", cbpb.Build_SUCCESS, now, now.Add(time.Minute)),
-			expectedCount: 2, // build duration + last run status (no step durations)
+			build:         createBuildWithStepsWithoutTiming("test-build-5", "test-project", cbpb.Build_SUCCESS, createTime, startTime, finishTime),
+			expectedCount: 4, // build duration + queue duration + last run status + timestamp
 			description:   "Build with steps that don't have timing information",
 		},
 		{
 			name:          "failed build",
-			build:         createCompleteBuild("test-build-6", "test-project", cbpb.Build_FAILURE, now, now.Add(time.Minute)),
-			expectedCount: 4, // build duration + 2 step durations + last run status
+			build:         createCompleteBuild("test-build-6", "test-project", cbpb.Build_FAILURE, createTime, startTime, finishTime),
+			expectedCount: 6, // build duration + queue duration + 2 step durations + last run status + timestamp
 			description:   "Failed build with all timing information",
 		},
 	}
@@ -290,7 +288,7 @@ func TestCollectMetrics(t *testing.T) {
 			}
 
 			// Verify common labels are present in all metrics
-			expectedLabels := []string{"cloud_account_id", "trigger_name", "repo_name", "commit_sha", "status", "machine_type", "ref_type", "ref"}
+			expectedLabels := []string{"cloud_account_id", "trigger_name", "repo_name", "status", "machine_type", "ref_type", "ref"}
 			for _, metric := range metrics {
 				labelMap := make(map[string]string)
 				for _, label := range metric.Labels {
@@ -311,7 +309,10 @@ func TestCollectMetrics(t *testing.T) {
 
 func TestCollectMetricsSpecificValues(t *testing.T) {
 	now := time.Now()
-	build := createCompleteBuild("test-build", "test-project", cbpb.Build_SUCCESS, now, now.Add(time.Minute))
+	createTime := now.Add(-30 * time.Second)
+	startTime := now
+	finishTime := now.Add(time.Minute)
+	build := createCompleteBuild("test-build", "test-project", cbpb.Build_SUCCESS, createTime, startTime, finishTime)
 
 	p := &prometheusNotifier{}
 	metrics := p.collectMetrics(build)
@@ -325,8 +326,17 @@ func TestCollectMetricsSpecificValues(t *testing.T) {
 		t.Errorf("expected build duration of 60 seconds, got %f", buildDuration.Samples[0].Value)
 	}
 
+	// Verify queue duration metric
+	queueDuration := metrics[1]
+	if queueDuration.Labels[0].Name != "__name__" || queueDuration.Labels[0].Value != "cloudbuild_build_queue_duration_seconds" {
+		t.Errorf("invalid metric name for queue duration")
+	}
+	if queueDuration.Samples[0].Value != 30.0 { // 30 seconds
+		t.Errorf("expected queue duration of 30 seconds, got %f", queueDuration.Samples[0].Value)
+	}
+
 	// Verify step duration metrics
-	stepDuration1 := metrics[1]
+	stepDuration1 := metrics[2]
 	if stepDuration1.Labels[0].Name != "__name__" || stepDuration1.Labels[0].Value != "cloudbuild_step_duration_seconds" {
 		t.Errorf("invalid metric name for step duration")
 	}
@@ -334,18 +344,28 @@ func TestCollectMetricsSpecificValues(t *testing.T) {
 		t.Errorf("expected first step duration of 30 seconds, got %f", stepDuration1.Samples[0].Value)
 	}
 
-	stepDuration2 := metrics[2]
+	stepDuration2 := metrics[3]
 	if stepDuration2.Samples[0].Value != 30.0 { // 30 seconds
 		t.Errorf("expected second step duration of 30 seconds, got %f", stepDuration2.Samples[0].Value)
 	}
 
 	// Verify last run status metric
-	lastRun := metrics[3]
+	lastRun := metrics[4]
 	if lastRun.Labels[0].Name != "__name__" || lastRun.Labels[0].Value != "cloudbuild_build_last_run_status" {
 		t.Errorf("invalid metric name for last run status")
 	}
 	if lastRun.Samples[0].Value != 1.0 {
 		t.Errorf("expected last run status of 1.0, got %f", lastRun.Samples[0].Value)
+	}
+
+	// Verify build timestamp metric
+	buildTimestamp := metrics[5]
+	if buildTimestamp.Labels[0].Name != "__name__" || buildTimestamp.Labels[0].Value != "cloudbuild_build_timestamp" {
+		t.Errorf("invalid metric name for build timestamp")
+	}
+	expectedTimestamp := float64(finishTime.UnixNano() / int64(time.Millisecond))
+	if buildTimestamp.Samples[0].Value != expectedTimestamp {
+		t.Errorf("expected build timestamp of %f, got %f", expectedTimestamp, buildTimestamp.Samples[0].Value)
 	}
 
 	// Verify specific label values
@@ -358,7 +378,6 @@ func TestCollectMetricsSpecificValues(t *testing.T) {
 		"cloud_account_id": "test-project",
 		"trigger_name":     "test-trigger",
 		"repo_name":        "test-repo",
-		"commit_sha":       "abc123",
 		"status":           "SUCCESS",
 		"machine_type":     "E2_HIGHCPU_8",
 		"ref_type":         "branch",
@@ -376,7 +395,7 @@ func TestCollectMetricsSpecificValues(t *testing.T) {
 
 func TestSendNotification(t *testing.T) {
 	now := time.Now()
-	build := createCompleteBuild("test-build", "test-project", cbpb.Build_SUCCESS, now, now.Add(time.Minute))
+	build := createCompleteBuild("test-build", "test-project", cbpb.Build_SUCCESS, now.Add(- time.Minute), now, now.Add(time.Minute))
 
 	tests := []struct {
 		name    string
@@ -413,8 +432,8 @@ func TestSendNotification(t *testing.T) {
 					Notification: &notifiers.Notification{
 						Filter: tt.filter,
 						Delivery: map[string]interface{}{
-							"url":      "http://example.com:9090/api/v1/write",
-							"username": "michaelact",
+							"url":      "http://example.com/api/v1/write",
+							"username": "prometheus-username",
 							"password": map[interface{}]interface{}{
 								"secretRef": "prometheus-password",
 							},
@@ -453,25 +472,25 @@ func TestSendNotificationWithDifferentBuildTypes(t *testing.T) {
 	}{
 		{
 			name:    "tag build with branch filter",
-			build:   createTagBuild("tag-build", "test-project", cbpb.Build_SUCCESS, now, now.Add(time.Minute)),
+			build:   createTagBuild("tag-build", "test-project", cbpb.Build_SUCCESS, now.Add(- time.Minute), now, now.Add(time.Minute)),
 			filter:  "build.substitutions['TAG_NAME'] != ''",
 			wantErr: false,
 		},
 		{
 			name:    "branch build with tag filter",
-			build:   createCompleteBuild("branch-build", "test-project", cbpb.Build_SUCCESS, now, now.Add(time.Minute)),
+			build:   createCompleteBuild("branch-build", "test-project", cbpb.Build_SUCCESS, now.Add(- time.Minute), now, now.Add(time.Minute)),
 			filter:  "build.substitutions['BRANCH_NAME'] != ''",
 			wantErr: false,
 		},
 		{
 			name:    "build without ref",
-			build:   createBuildWithoutRef("no-ref-build", "test-project", cbpb.Build_SUCCESS, now, now.Add(time.Minute)),
+			build:   createBuildWithoutRef("no-ref-build", "test-project", cbpb.Build_SUCCESS, now.Add(- time.Minute), now, now.Add(time.Minute)),
 			filter:  "build.status == Build.Status.SUCCESS",
 			wantErr: false,
 		},
 		{
 			name:    "failed build",
-			build:   createCompleteBuild("failed-build", "test-project", cbpb.Build_FAILURE, now, now.Add(time.Minute)),
+			build:   createCompleteBuild("failed-build", "test-project", cbpb.Build_FAILURE, now.Add(- time.Minute), now, now.Add(time.Minute)),
 			filter:  "build.status == Build.Status.FAILURE",
 			wantErr: false,
 		},
@@ -485,8 +504,8 @@ func TestSendNotificationWithDifferentBuildTypes(t *testing.T) {
 					Notification: &notifiers.Notification{
 						Filter: tt.filter,
 						Delivery: map[string]interface{}{
-							"url":      "http://example.com:9090/api/v1/write",
-							"username": "michaelact",
+							"url":      "http://example.com/api/v1/write",
+							"username": "prometheus-username",
 							"password": map[interface{}]interface{}{
 								"secretRef": "prometheus-password",
 							},
