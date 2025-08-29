@@ -6,21 +6,26 @@ This notifier sends Cloud Build metrics to Prometheus using remote write protoco
 
 The notifier collects the following metrics:
 
-- `cloudbuild_build_duration_seconds`: Duration of the entire build
+- `cloudbuild_build_duration_seconds`: Duration of the entire build (from start to finish)
+- `cloudbuild_build_queue_duration_seconds`: Duration the build spent waiting in the queue (from create to start)
 - `cloudbuild_step_duration_seconds`: Duration of individual build steps
-- `cloudbuild_build_last_run_status`: Status of the last build run
+- `cloudbuild_build_last_run_status`: Status of the last build run (1.0 for success, 0.0 for failure)
+- `cloudbuild_build_timestamp`: Timestamp of when the build finished (or started if no finish time)
 
 Each metric includes labels such as:
 - `cloud_account_id`: The GCP project ID
 - `trigger_name`: Name of the Cloud Build trigger
 - `repo_name`: Name of the source repository
-- `commit_sha`: Short SHA of the commit
-- `status`: Build status
+- `status`: Build status (SUCCESS, FAILURE, etc.)
 - `machine_type`: Type of machine used for the build
-- `ref_type`: Type of reference (branch/tag)
+- `ref_type`: Type of reference (branch/tag/unknown)
 - `ref`: Name of the branch or tag
 - `failure_type`: Type of failure (if build failed)
-- `failure_detail`: Detailed failure information (if build failed)
+
+Additional labels for step metrics:
+- `step_name`: Name of the individual build step
+- `step_status`: Status of the individual build step
+- `step_id`: ID of the individual build step
 
 ## Configuration
 
