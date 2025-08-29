@@ -284,7 +284,7 @@ func (p *prometheusNotifier) collectMetrics(build *cbpb.Build) []prompb.TimeSeri
 
 	metrics = append(metrics, p.createGaugeMetric(
 		"cloudbuild_build_timestamp",
-		statusTimestamp,
+		float64(statusTimestamp),
 		commonLabels,
 		statusTimestamp,
 	))
