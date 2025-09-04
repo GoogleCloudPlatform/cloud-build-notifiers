@@ -18,7 +18,6 @@ Each metric includes labels such as:
 - `repo_name`: Name of the source repository
 - `status`: Build status (SUCCESS, FAILURE, etc.)
 - `machine_type`: Type of machine used for the build (fetched from worker pool config for private pools)
-- `worker_pool`: Name of the private worker pool (empty for standard machines)
 - `ref_type`: Type of reference (branch/tag/unknown)
 - `ref`: Name of the branch or tag
 - `failure_type`: Type of failure (if build failed)
