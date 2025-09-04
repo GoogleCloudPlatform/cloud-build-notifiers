@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"time"
 
+	cloudbuild "cloud.google.com/go/cloudbuild/apiv1/v2"
 	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
@@ -45,9 +46,10 @@ func main() {
 }
 
 type prometheusNotifier struct {
-	filter       notifiers.EventFilter
-	client       remote.WriteClient
-	clientConfig *remote.ClientConfig
+	filter           notifiers.EventFilter
+	client           remote.WriteClient
+	clientConfig     *remote.ClientConfig
+	cloudbuildClient *cloudbuild.Client
 }
 
 func (p *prometheusNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _ string, sg notifiers.SecretGetter, _ notifiers.BindingResolver) error {
@@ -136,6 +138,14 @@ func (p *prometheusNotifier) SetUp(ctx context.Context, cfg *notifiers.Config, _
 		return fmt.Errorf("failed to create remote write client: %w", err)
 	}
 	p.client = client
+
+	cbClient, err := cloudbuild.NewClient(ctx)
+	if err != nil {
+		log.Errorf("Failed to create cloudbuild client: %v", err)
+		return fmt.Errorf("failed to create cloudbuild client: %w", err)
+	}
+	p.cloudbuildClient = cbClient
+
 	log.Infof("Prometheus notifier setup completed successfully")
 	return nil
 }
@@ -152,7 +162,7 @@ func (p *prometheusNotifier) SendNotification(ctx context.Context, build *cbpb.B
 
 	// Collect metrics from build
 	log.V(2).Infof("Collecting metrics for build %s", build.Id)
-	metrics := p.collectMetrics(build)
+	metrics := p.collectMetrics(ctx, build)
 	log.V(2).Infof("Collected %d metrics for build %s", len(metrics), build.Id)
 
 	// Write metrics to Prometheus
@@ -167,7 +177,7 @@ func (p *prometheusNotifier) SendNotification(ctx context.Context, build *cbpb.B
 
 // CAUTION: HIGH CARDINALITY
 // Ref: https://prometheus.io/docs/practices/naming/#:~:text=CAUTION%3A%20Remember,sets%20of%20values.
-func (p *prometheusNotifier) collectMetrics(build *cbpb.Build) []prompb.TimeSeries {
+func (p *prometheusNotifier) collectMetrics(ctx context.Context, build *cbpb.Build) []prompb.TimeSeries {
 	var metrics []prompb.TimeSeries
 
 	// Get common labels
@@ -176,8 +186,8 @@ func (p *prometheusNotifier) collectMetrics(build *cbpb.Build) []prompb.TimeSeri
 		"trigger_name":     build.Substitutions["TRIGGER_NAME"],
 		"repo_name":        build.Substitutions["REPO_NAME"],
 		// "commit_sha":       build.Substitutions["SHORT_SHA"], // CAUTION: HIGH CARDINALITY
-		"status":           build.Status.String(),
-		"machine_type":     build.Options.GetMachineType().String(),
+		"status":       build.Status.String(),
+		"machine_type": p.getMachineType(ctx, build),
 	}
 	log.V(3).Infof("Common labels for build %s: %+v", build.Id, commonLabels)
 
@@ -291,6 +301,29 @@ func (p *prometheusNotifier) collectMetrics(build *cbpb.Build) []prompb.TimeSeri
 	log.V(3).Infof("Added build timestamp metric for build %s", build.Id)
 
 	return metrics
+}
+
+func (p *prometheusNotifier) getMachineType(ctx context.Context, build *cbpb.Build) string {
+	if pool := build.Options.GetPool(); pool != nil && pool.GetName() != "" {
+		log.V(3).Infof("Build %s is using a private pool: %s", build.Id, pool.GetName())
+		req := &cbpb.GetWorkerPoolRequest{
+			Name: pool.GetName(),
+		}
+		workerPool, err := p.cloudbuildClient.GetWorkerPool(ctx, req)
+		if err != nil {
+			log.Warningf("Failed to get worker pool info for %q: %v. Falling back to build options machine type.", pool.GetName(), err)
+			return build.Options.GetMachineType().String()
+		}
+
+		if workerPool.GetPrivatePoolV1Config() != nil && workerPool.GetPrivatePoolV1Config().GetWorkerConfig() != nil && workerPool.GetPrivatePoolV1Config().GetWorkerConfig().GetMachineType() != "" {
+			machineType := workerPool.GetPrivatePoolV1Config().GetWorkerConfig().GetMachineType()
+			log.V(3).Infof("Got machine type %q from worker pool %q", machineType, pool.GetName())
+			return machineType
+		}
+
+		log.Warningf("Worker pool %q has no worker config or machine type. Falling back to build options machine type.", pool.GetName())
+	}
+	return build.Options.GetMachineType().String()
 }
 
 func (p *prometheusNotifier) writeMetrics(ctx context.Context, metrics []prompb.TimeSeries) error {

@@ -36,4 +36,4 @@ WORKDIR /
 COPY --from=builder /workspace/prometheus-notifier .
 USER 65532:65532
 
-ENTRYPOINT ["/prometheus-notifier"]
+ENTRYPOINT ["/prometheus-notifier", "-v=2", "-logtostderr=true"]
