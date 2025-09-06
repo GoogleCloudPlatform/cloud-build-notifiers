@@ -2,6 +2,12 @@
 
 This notifier sends Cloud Build metrics to Prometheus using remote write protocol. It collects various metrics about builds, steps, and their durations, making them available for monitoring and alerting.
 
+## Dashboard
+
+![grafana_dashboard_pipelines](/prometheus/docs/example_dashboard.jpeg)
+
+https://grafana.com/grafana/dashboards/24009-cloud-build/
+
 ## Metrics
 
 The notifier collects the following metrics:
