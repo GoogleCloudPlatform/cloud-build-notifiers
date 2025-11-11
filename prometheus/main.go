@@ -184,6 +184,7 @@ func (p *prometheusNotifier) collectMetrics(ctx context.Context, build *cbpb.Bui
 	// Get common labels
 	commonLabels := map[string]string{
 		"cloud_account_id": build.ProjectId,
+		"cloud_region":     build.Substitutions["LOCATION"],
 		"trigger_name":     build.Substitutions["TRIGGER_NAME"],
 		"repo_name":        build.Substitutions["REPO_NAME"],
 		// "commit_sha":       build.Substitutions["SHORT_SHA"], // CAUTION: HIGH CARDINALITY
