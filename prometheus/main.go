@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	cloudbuild "cloud.google.com/go/cloudbuild/apiv1/v2"
@@ -312,7 +313,7 @@ func (p *prometheusNotifier) getMachineType(ctx context.Context, build *cbpb.Bui
 		workerPool, err := p.cloudbuildClient.GetWorkerPool(ctx, req)
 		if err != nil {
 			log.Warningf("Failed to get worker pool info for %q: %v. Falling back to build options machine type.", pool.GetName(), err)
-			return build.Options.GetMachineType().String()
+			return p.normalizeMachineType(build.Options.GetMachineType().String())
 		}
 
 		if workerPool.GetPrivatePoolV1Config() != nil && workerPool.GetPrivatePoolV1Config().GetWorkerConfig() != nil && workerPool.GetPrivatePoolV1Config().GetWorkerConfig().GetMachineType() != "" {
@@ -323,7 +324,20 @@ func (p *prometheusNotifier) getMachineType(ctx context.Context, build *cbpb.Bui
 
 		log.Warningf("Worker pool %q has no worker config or machine type. Falling back to build options machine type.", pool.GetName())
 	}
-	return build.Options.GetMachineType().String()
+	return p.normalizeMachineType(build.Options.GetMachineType().String())
+}
+
+func (p *prometheusNotifier) normalizeMachineType(machineType string) string {
+	// Handle UNSPECIFIED case
+	if machineType == "UNSPECIFIED" || machineType == "" {
+		return "e2-standard-2"
+	}
+
+	// Convert from uppercase with underscores to lowercase with dashes
+	// E.g., N2_HIGHCPU_8 -> n2-highcpu-8
+	normalized := strings.ToLower(strings.ReplaceAll(machineType, "_", "-"))
+	log.V(3).Infof("Normalized machine type from %q to %q", machineType, normalized)
+	return normalized
 }
 
 func (p *prometheusNotifier) writeMetrics(ctx context.Context, metrics []prompb.TimeSeries) error {
