@@ -181,10 +181,16 @@ func (p *prometheusNotifier) SendNotification(ctx context.Context, build *cbpb.B
 func (p *prometheusNotifier) collectMetrics(ctx context.Context, build *cbpb.Build) []prompb.TimeSeries {
 	var metrics []prompb.TimeSeries
 
+	// Extract region from build.Name (format: projects/{project}/locations/{location}/builds/{build})
+	region := ""
+	if parts := strings.Split(build.Name, "/"); len(parts) >= 4 && parts[2] == "locations" {
+		region = parts[3]
+	}
+
 	// Get common labels
 	commonLabels := map[string]string{
 		"cloud_account_id": build.ProjectId,
-		"cloud_region":     build.Substitutions["LOCATION"],
+		"cloud_region":     region,
 		"trigger_name":     build.Substitutions["TRIGGER_NAME"],
 		"repo_name":        build.Substitutions["REPO_NAME"],
 		// "commit_sha":       build.Substitutions["SHORT_SHA"], // CAUTION: HIGH CARDINALITY
@@ -202,10 +208,14 @@ func (p *prometheusNotifier) collectMetrics(ctx context.Context, build *cbpb.Bui
 		commonLabels["ref_type"] = "tag"
 		commonLabels["ref"] = tag
 		log.V(3).Infof("Build %s is on tag: %s", build.Id, tag)
+	} else if sha := build.Substitutions["COMMIT_SHA"]; sha != "" {
+		commonLabels["ref_type"] = "sha"
+		commonLabels["ref"] = sha
+		log.V(3).Infof("Build %s is on sha: %s", build.Id, sha)
 	} else {
-		commonLabels["ref_type"] = "unknown"
-		commonLabels["ref"] = "[no branch or tag]"
-		log.V(3).Infof("Build %s has no branch or tag information", build.Id)
+		commonLabels["ref_type"] = "UNSPECIFIED"
+		commonLabels["ref"] = "UNSPECIFIED"
+		log.V(3).Infof("Build %s has no branch, tag or sha information", build.Id)
 	}
 
 	// Add failure information if available
