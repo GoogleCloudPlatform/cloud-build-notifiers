@@ -133,5 +133,15 @@ func (s *slackNotifier) writeMessage() (*slack.WebhookMessage, error) {
 		return nil, fmt.Errorf("failed to unmarshal templating JSON: %w", err)
 	}
 
-	return &slack.WebhookMessage{Attachments: []slack.Attachment{{Color: clr, Blocks: blocks}}}, nil
+	// Add Text field for Slack push notification preview
+	triggerName := build.Substitutions["TRIGGER_NAME"]
+	if triggerName == "" {
+		triggerName = build.ProjectId
+	}
+	previewText := fmt.Sprintf("Cloud Build %s: %s", build.Status, triggerName)
+	
+	return &slack.WebhookMessage{
+		Text:        previewText,
+		Attachments: []slack.Attachment{{Color: clr, Blocks: blocks}},
+	}, nil
 }
