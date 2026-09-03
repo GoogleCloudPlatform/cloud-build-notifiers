@@ -1,0 +1,15 @@
+steps:
+  # Run tests
+  - name: 'golang:1.21'
+    entrypoint: go
+    args: ['test', './prometheus']
+
+  # Run linter
+  - name: 'golang:1.21'
+    entrypoint: go
+    args: ['vet', './prometheus']
+
+  # Run gofmt
+  - name: 'golang:1.21'
+    entrypoint: gofmt
+    args: ['-l', '-s', './prometheus']
