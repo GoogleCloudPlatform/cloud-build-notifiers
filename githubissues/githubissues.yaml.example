@@ -21,7 +21,7 @@ spec:
     filter: build.status == Build.Status.FAILURE
     template: 
       type: golang
-      uri: gs://project-name/githubissues.json
+      uri: gs://example-gcs-bucket/githubissues.json
     delivery:
       githubToken:
         secretRef: github-token

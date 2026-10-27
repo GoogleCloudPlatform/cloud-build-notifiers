@@ -21,7 +21,7 @@ spec:
     filter: build.status == Build.Status.SUCCESS
     template:
       type: golang
-      uri: gs://project-name/http.json
+      uri: gs://example-gcs-bucket/http.json
     delivery:
       # The `http(s)://` protocol prefix is required.
       url: https://some-endpoint

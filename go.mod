@@ -10,6 +10,7 @@ require (
 	cloud.google.com/go v0.112.2
 	cloud.google.com/go/bigquery v1.60.0
 	cloud.google.com/go/cloudbuild v1.16.0
+	cloud.google.com/go/compute/metadata v0.6.0
 	cloud.google.com/go/secretmanager v1.12.0
 	cloud.google.com/go/storage v1.40.0
 	github.com/golang/glog v1.2.4
@@ -26,7 +27,6 @@ require (
 require (
 	cloud.google.com/go/auth v0.2.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.0 // indirect
-	cloud.google.com/go/compute/metadata v0.3.0 // indirect
 	cloud.google.com/go/iam v1.1.7 // indirect
 	cloud.google.com/go/longrunning v0.5.6 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect

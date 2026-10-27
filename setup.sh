@@ -30,7 +30,7 @@ the repo) are:
 
 Usage [in the cloud-build-notifiers repo root]:
 
-./setup.sh <notifier-type> <local-config-path> [-s secret-name] [-t local-template-path]
+./setup.sh <notifier-type> <local-config-path> [-b destination-bucket-name] [-s secret-name] [-t local-template-path]
 
 Concrete example:
 
@@ -54,15 +54,17 @@ main() {
     fail "${HELP}"
   fi
 
+  DESTINATION_BUCKET_NAME=""
   SECRET_NAME=""
   SOURCE_TEMPLATE_PATH=""
 
   while [ $OPTIND -le "$#" ]
   do
-    if getopts s:t: option
+    if getopts b:s:t: option
     then
         case $option
         in
+            b) DESTINATION_BUCKET_NAME="$OPTARG";;
             s) SECRET_NAME="$OPTARG";;
             t) SOURCE_TEMPLATE_PATH="$OPTARG";;
         esac
@@ -109,6 +111,9 @@ main() {
   PROJECT_NUMBER=$(gcloud projects describe "${PROJECT_ID}" \
     --format="value(projectNumber)") ||
     fail "could not get project number"
+  if [ -z "${PROJECT_NUMBER}" ]; then
+    fail "could not get project number for project ${PROJECT_ID}"
+  fi
 
   # Region, from Cloud Run configuration
   REGION=$(gcloud config get-value run/region)
@@ -116,9 +121,20 @@ main() {
     fail "default cloud run region not set; run \"gcloud config set run/region <region>\""
   fi
 
+  if [ -z "${DESTINATION_BUCKET_NAME}" ]; then
+    RANDOM_SUFFIX=$(generate_random_suffix) ||
+      fail "could not generate random suffix for bucket name"
+    if [ -z "${RANDOM_SUFFIX}" ]; then
+      fail "could not generate random suffix for bucket name"
+    fi
+    DESTINATION_BUCKET_NAME="notifiers-config-${RANDOM_SUFFIX}"
+  else
+    DESTINATION_BUCKET_NAME="${DESTINATION_BUCKET_NAME#gs://}"
+    DESTINATION_BUCKET_NAME="${DESTINATION_BUCKET_NAME%/}"
+  fi
+
   REQUIRED_SERVICES=('cloudbuild.googleapis.com' 'run.googleapis.com' 'pubsub.googleapis.com')
   SOURCE_CONFIG_BASENAME=$(basename "${SOURCE_CONFIG_PATH}")
-  DESTINATION_BUCKET_NAME="${PROJECT_ID}-notifiers-config"
   DESTINATION_BUCKET_URI="gs://${DESTINATION_BUCKET_NAME}"
   DESTINATION_CONFIG_PATH="${DESTINATION_BUCKET_URI}/${SOURCE_CONFIG_BASENAME}"
   SOURCE_TEMPLATE_BASENAME=$(basename "${SOURCE_TEMPLATE_PATH}")
@@ -158,11 +174,26 @@ main() {
   check_pubsub_subscription
 
   echo "** NOTIFIER SETUP COMPLETE **" 1>&2
+  echo "Config bucket: ${DESTINATION_BUCKET_URI}" 1>&2
+  echo "Config: ${DESTINATION_CONFIG_PATH}" 1>&2
+  echo "re-run with -b ${DESTINATION_BUCKET_NAME} to update this notifier" 1>&2
 }
 
 fail() {
   echo "$*" 1>&2
   exit 1
+}
+
+generate_random_suffix() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 16
+  elif [ -r /proc/sys/kernel/random/uuid ]; then
+    tr -d '-' < /proc/sys/kernel/random/uuid | tr '[:upper:]' '[:lower:]'
+  elif command -v uuidgen >/dev/null 2>&1; then
+    uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]'
+  else
+    return 1
+  fi
 }
 
 check_apis_enabled() {
@@ -185,18 +216,49 @@ add_secret_name_accessor_permission() {
     fail "failed to set up secret access"
 }
 
-upload_config() {
-  # We allow this `mb` command to error since we rely on the `cp` command hard-
-  # erroring if there's an actual problem (since `mb` fails if the bucket
-  # already exists).
-  gcloud storage buckets create "${DESTINATION_BUCKET_URI}"
+verify_bucket_owner() {
+  BUCKET_PROJECT_NUMBER=$(gcloud storage buckets describe "${DESTINATION_BUCKET_URI}" \
+    --raw --format="value(projectNumber)") ||
+    fail "failed to describe bucket ${DESTINATION_BUCKET_URI}"
 
-  gcloud storage cp "${SOURCE_CONFIG_PATH}" "${DESTINATION_CONFIG_PATH}" ||
-    fail "failed to copy config to GCS"
+  if [ -z "${BUCKET_PROJECT_NUMBER}" ]; then
+    fail "could not get project number for bucket ${DESTINATION_BUCKET_URI}"
+  fi
+
+  if [ "${BUCKET_PROJECT_NUMBER}" != "${PROJECT_NUMBER}" ]; then
+    fail "bucket ${DESTINATION_BUCKET_URI} is not owned by project ${PROJECT_ID} (expected project number ${PROJECT_NUMBER}, got ${BUCKET_PROJECT_NUMBER})"
+  fi
+}
+
+upload_config() {
+  if ! gcloud storage buckets describe "${DESTINATION_BUCKET_URI}" >/dev/null 2>&1; then
+    gcloud storage buckets create "${DESTINATION_BUCKET_URI}" \
+      --project="${PROJECT_ID}" \
+      --uniform-bucket-level-access ||
+      fail "failed to create bucket ${DESTINATION_BUCKET_URI}"
+  fi
+
+  verify_bucket_owner
 
   if [ ! -z "${SOURCE_TEMPLATE_PATH}" ]; then
+    TEMP_CONFIG_PATH=$(mktemp) ||
+      fail "failed to create temporary config file"
+    sed "s|\(uri:[[:space:]]*['\"]*\)gs://[^'\"[:space:]]*|\1${DESTINATION_TEMPLATE_PATH}|" \
+      "${SOURCE_CONFIG_PATH}" > "${TEMP_CONFIG_PATH}" || {
+      rm -f "${TEMP_CONFIG_PATH}"
+      fail "failed to update template URI in config"
+    }
+    gcloud storage cp "${TEMP_CONFIG_PATH}" "${DESTINATION_CONFIG_PATH}" || {
+      rm -f "${TEMP_CONFIG_PATH}"
+      fail "failed to copy config to GCS"
+    }
+    rm -f "${TEMP_CONFIG_PATH}"
+
     gcloud storage cp "${SOURCE_TEMPLATE_PATH}" "${DESTINATION_TEMPLATE_PATH}" ||
       fail "failed to copy template to GCS"
+  else
+    gcloud storage cp "${SOURCE_CONFIG_PATH}" "${DESTINATION_CONFIG_PATH}" ||
+      fail "failed to copy config to GCS"
   fi
 
 }
@@ -205,7 +267,7 @@ deploy_notifier() {
   gcloud run deploy "${SERVICE_NAME}" \
     --image="${IMAGE_PATH}" \
     --no-allow-unauthenticated \
-    --update-env-vars="CONFIG_PATH=${DESTINATION_CONFIG_PATH},PROJECT_ID=${PROJECT_ID}" ||
+    --update-env-vars="CONFIG_PATH=${DESTINATION_CONFIG_PATH},PROJECT_ID=${PROJECT_ID},PROJECT_NUMBER=${PROJECT_NUMBER}" ||
     fail "failed to deploy notifier service -- check service logs for configuration error"
 }
 

@@ -28,10 +28,12 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
+	"cloud.google.com/go/compute/metadata"
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	smpb "cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"cloud.google.com/go/storage"
@@ -228,6 +230,11 @@ func Main(notifier Notifier) error {
 		return errors.New("expected CONFIG_PATH to be non-empty")
 	}
 
+	projectNum, err := getProjectNumber(ctx, metadata.NumericProjectIDWithContext)
+	if err != nil {
+		return fmt.Errorf("failed to get project number: %w", err)
+	}
+
 	sc, err := storage.NewClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create new GCS client: %w", err)
@@ -240,7 +247,9 @@ func Main(notifier Notifier) error {
 	}
 	defer smc.Close()
 
-	cfg, err := getGCSConfig(ctx, &actualGCSReaderFactory{sc}, cfgPath)
+	grf := newActualGCSReaderFactory(sc, projectNum)
+
+	cfg, err := getGCSConfig(ctx, grf, cfgPath)
 	if err != nil {
 		return fmt.Errorf("failed to get config from GCS: %w", err)
 	}
@@ -250,7 +259,7 @@ func Main(notifier Notifier) error {
 	}
 	log.V(2).Infof("got config from GCS (%q): %+v\n", cfgPath, cfg)
 
-	tmpl, err := parseTemplate(ctx, cfg.Spec.Notification.Template, &actualGCSReaderFactory{sc})
+	tmpl, err := parseTemplate(ctx, cfg.Spec.Notification.Template, grf)
 	if err != nil {
 		return fmt.Errorf("failed to parse template from notiifer spec %q: %w", cfg.Spec.Notification.Template, err)
 	}
@@ -317,16 +326,78 @@ func parseTemplate(ctx context.Context, tmpl *Template, grf gcsReaderFactory) (s
 
 }
 
+func getProjectNumber(ctx context.Context, metadataNumericProjectID func(context.Context) (string, error)) (uint64, error) {
+	projectNumStr, ok := GetEnv("PROJECT_NUMBER")
+	if !ok {
+		if metadataNumericProjectID == nil {
+			return 0, errors.New("PROJECT_NUMBER env var not set and metadata lookup unavailable")
+		}
+		var err error
+		projectNumStr, err = metadataNumericProjectID(ctx)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get project number from PROJECT_NUMBER env var or metadata server: %w", err)
+		}
+	}
+	projectNum, err := strconv.ParseUint(strings.TrimSpace(projectNumStr), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid project number %q: %w", projectNumStr, err)
+	}
+	if projectNum == 0 {
+		return 0, fmt.Errorf("expected non-zero project number, got %q", projectNumStr)
+	}
+	return projectNum, nil
+}
+
 type gcsReaderFactory interface {
 	NewReader(ctx context.Context, bucket, object string) (io.ReadCloser, error)
 }
 
 type actualGCSReaderFactory struct {
-	client *storage.Client
+	projectNumber   uint64
+	bucketAttrs     func(ctx context.Context, bucket string) (*storage.BucketAttrs, error)
+	newObjectReader func(ctx context.Context, bucket, object string) (io.ReadCloser, error)
+}
+
+func newActualGCSReaderFactory(client *storage.Client, projectNumber uint64) *actualGCSReaderFactory {
+	return &actualGCSReaderFactory{
+		projectNumber: projectNumber,
+		bucketAttrs: func(ctx context.Context, bucket string) (*storage.BucketAttrs, error) {
+			return client.Bucket(bucket).Attrs(ctx)
+		},
+		newObjectReader: func(ctx context.Context, bucket, object string) (io.ReadCloser, error) {
+			return client.Bucket(bucket).Object(object).NewReader(ctx)
+		},
+	}
+}
+
+func (a *actualGCSReaderFactory) verifyBucketOwnership(ctx context.Context, bucket string) error {
+	if a.projectNumber == 0 {
+		return errors.New("expected non-zero project number for bucket ownership verification")
+	}
+	if a.bucketAttrs == nil {
+		return errors.New("bucketAttrs function is nil")
+	}
+	attrs, err := a.bucketAttrs(ctx, bucket)
+	if err != nil {
+		return fmt.Errorf("failed to get bucket attributes for %q: %w", bucket, err)
+	}
+	if attrs == nil {
+		return fmt.Errorf("got nil bucket attributes for %q", bucket)
+	}
+	if attrs.ProjectNumber != a.projectNumber {
+		return fmt.Errorf("bucket ownership verification failed: bucket %q belongs to project number %d, expected %d", bucket, attrs.ProjectNumber, a.projectNumber)
+	}
+	return nil
 }
 
 func (a *actualGCSReaderFactory) NewReader(ctx context.Context, bucket, object string) (io.ReadCloser, error) {
-	return a.client.Bucket(bucket).Object(object).NewReader(ctx)
+	if err := a.verifyBucketOwnership(ctx, bucket); err != nil {
+		return nil, err
+	}
+	if a.newObjectReader == nil {
+		return nil, errors.New("newObjectReader function is nil")
+	}
+	return a.newObjectReader(ctx, bucket, object)
 }
 
 type actualSecretManager struct {

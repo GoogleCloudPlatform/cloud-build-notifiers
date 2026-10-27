@@ -7,7 +7,7 @@ spec:
     filter: build.status == Build.Status.SUCCESS
     template:
       type: golang
-      uri: gs://project-name/arbitary.json
+      uri: gs://example-gcs-bucket/arbitary.json
     delivery:
       table: projects/project-name/test-data/tables/build_data
 

@@ -32,6 +32,7 @@ import (
 	"google.golang.org/protobuf/protoadapt"
 
 	cbpb "cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
+	"cloud.google.com/go/storage"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -913,3 +914,186 @@ func TestParseTemplate(t *testing.T) {
 	}
 
 }
+
+func TestGetProjectNumber(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name        string
+		envVal      string
+		metadataFn  func(context.Context) (string, error)
+		wantProjNum uint64
+		wantErr     bool
+	}{
+		{
+			name:        "from PROJECT_NUMBER env var",
+			envVal:      "123456789",
+			wantProjNum: 123456789,
+		},
+		{
+			name:   "fallback to metadata server",
+			envVal: "",
+			metadataFn: func(context.Context) (string, error) {
+				return "987654321\n", nil
+			},
+			wantProjNum: 987654321,
+		},
+		{
+			name:    "invalid PROJECT_NUMBER env var",
+			envVal:  "not-a-number",
+			wantErr: true,
+		},
+		{
+			name:    "zero PROJECT_NUMBER env var",
+			envVal:  "0",
+			wantErr: true,
+		},
+		{
+			name:   "metadata server error",
+			envVal: "",
+			metadataFn: func(context.Context) (string, error) {
+				return "", errors.New("metadata server unreachable")
+			},
+			wantErr: true,
+		},
+		{
+			name:       "nil metadata function without env var",
+			envVal:     "",
+			metadataFn: nil,
+			wantErr:    true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("PROJECT_NUMBER", tc.envVal)
+			got, err := getProjectNumber(ctx, tc.metadataFn)
+			if err != nil {
+				if tc.wantErr {
+					t.Logf("got expected error: %v", err)
+					return
+				}
+				t.Fatalf("getProjectNumber() got unexpected error: %v", err)
+			}
+			if tc.wantErr {
+				t.Fatalf("getProjectNumber() = %d, want error", got)
+			}
+			if got != tc.wantProjNum {
+				t.Errorf("getProjectNumber() = %d, want %d", got, tc.wantProjNum)
+			}
+		})
+	}
+}
+
+func TestVerifyBucketOwnership(t *testing.T) {
+	ctx := context.Background()
+	validYAML := strings.ReplaceAll(validConfigYAMLWithTabs, "\t", "    ")
+	validTemplate := `{{.Build.Status}}`
+
+	for _, tc := range []struct {
+		name            string
+		projectNumber   uint64
+		bucketAttrs     func(ctx context.Context, bucket string) (*storage.BucketAttrs, error)
+		wantErr         bool
+		wantErrContains string
+	}{
+		{
+			name:          "matching project number",
+			projectNumber: 123456789,
+			bucketAttrs: func(_ context.Context, _ string) (*storage.BucketAttrs, error) {
+				return &storage.BucketAttrs{ProjectNumber: 123456789}, nil
+			},
+			wantErr: false,
+		},
+		{
+			name:          "mismatched project number (squatted bucket)",
+			projectNumber: 123456789,
+			bucketAttrs: func(_ context.Context, _ string) (*storage.BucketAttrs, error) {
+				return &storage.BucketAttrs{ProjectNumber: 999999999}, nil
+			},
+			wantErr:         true,
+			wantErrContains: "bucket ownership verification failed",
+		},
+		{
+			name:          "bucketAttrs error",
+			projectNumber: 123456789,
+			bucketAttrs: func(_ context.Context, _ string) (*storage.BucketAttrs, error) {
+				return nil, errors.New("permission denied")
+			},
+			wantErr:         true,
+			wantErrContains: "failed to get bucket attributes",
+		},
+		{
+			name:          "nil bucketAttrs response",
+			projectNumber: 123456789,
+			bucketAttrs: func(_ context.Context, _ string) (*storage.BucketAttrs, error) {
+				return nil, nil
+			},
+			wantErr:         true,
+			wantErrContains: "got nil bucket attributes",
+		},
+		{
+			name:          "zero expected project number",
+			projectNumber: 0,
+			bucketAttrs: func(_ context.Context, _ string) (*storage.BucketAttrs, error) {
+				return &storage.BucketAttrs{ProjectNumber: 123456789}, nil
+			},
+			wantErr:         true,
+			wantErrContains: "expected non-zero project number",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			readerCalled := false
+			grf := &actualGCSReaderFactory{
+				projectNumber: tc.projectNumber,
+				bucketAttrs:   tc.bucketAttrs,
+				newObjectReader: func(_ context.Context, bucket, object string) (io.ReadCloser, error) {
+					readerCalled = true
+					if object == "config.yaml" {
+						return ioutil.NopCloser(bytes.NewBufferString(validYAML)), nil
+					}
+					return ioutil.NopCloser(bytes.NewBufferString(validTemplate)), nil
+				},
+			}
+
+			gotCfg, err := getGCSConfig(ctx, grf, "gs://my-bucket/config.yaml")
+			if err != nil {
+				if !tc.wantErr {
+					t.Fatalf("getGCSConfig() got unexpected error: %v", err)
+				}
+				if tc.wantErrContains != "" && !strings.Contains(err.Error(), tc.wantErrContains) {
+					t.Errorf("getGCSConfig() error = %q, want substring %q", err.Error(), tc.wantErrContains)
+				}
+				if readerCalled {
+					t.Errorf("newObjectReader was called despite bucket ownership verification failure")
+				}
+			} else {
+				if tc.wantErr {
+					t.Fatalf("getGCSConfig() succeeded unexpectedly, want error containing %q", tc.wantErrContains)
+				}
+				if diff := cmp.Diff(validConfig, gotCfg); diff != "" {
+					t.Errorf("getGCSConfig() diff (-want +got):\n%s", diff)
+				}
+			}
+
+			readerCalled = false
+			gotTmpl, err := parseTemplate(ctx, &Template{Type: "golang", URI: "gs://my-bucket/template.html"}, grf)
+			if err != nil {
+				if !tc.wantErr {
+					t.Fatalf("parseTemplate() got unexpected error: %v", err)
+				}
+				if tc.wantErrContains != "" && !strings.Contains(err.Error(), tc.wantErrContains) {
+					t.Errorf("parseTemplate() error = %q, want substring %q", err.Error(), tc.wantErrContains)
+				}
+				if readerCalled {
+					t.Errorf("newObjectReader was called for template despite bucket ownership verification failure")
+				}
+			} else {
+				if tc.wantErr {
+					t.Fatalf("parseTemplate() succeeded unexpectedly, want error containing %q", tc.wantErrContains)
+				}
+				if gotTmpl != validTemplate {
+					t.Errorf("parseTemplate() = %q, want %q", gotTmpl, validTemplate)
+				}
+			}
+		})
+	}
+}
+
